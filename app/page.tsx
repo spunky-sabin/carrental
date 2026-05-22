@@ -1,11 +1,15 @@
-import ThemedLogo from '@/components/ThemedLogo'
-import Link from "next/link";
+import DesktopLogin from "@/components/DesktopLogin";
+import MobileLogin from "@/components/MobileLogin";
 
 export default function Home() {
   return (
-      <Link href="/">
-          {}
-          <ThemedLogo />
-      </Link>
-  )
+    <main>
+      <div className="hidden lg:block">
+        <DesktopLogin />
+      </div>
+      <div className="lg:hidden">
+        <MobileLogin />
+      </div>
+    </main>
+  );
 }
