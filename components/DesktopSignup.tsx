@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-
-import LoginForm from "@/components/LoginForm";
+import SignupForm from "@/components/SignupForm";
 import ThemedLogo from "@/components/ThemedLogo";
 
 const pageShellStyle: CSSProperties = {
@@ -24,24 +23,25 @@ const pageShellStyle: CSSProperties = {
 
 const featureItems = [
   {
-    label: "Safe & Secure",
-    description: "Your data is protected with top security.",
-    icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+    label: "Premium Vehicles",
+    description: "Top quality cars for every journey.",
+    icon: <path d="M5 16v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2M4 12l2-5h12l2 5M6 12h12" />,
   },
   {
-    label: "Best Prices",
-    description: "Competitive rates on all vehicle types.",
+    label: "Flexible Rentals",
+    description: "Hourly, daily, or monthly. You choose.",
+    icon: <path d="M12 22s7-3.8 7-9.5V6l-7-3-7 3v6.5C5 18.2 12 22 12 22Z" />,
+  },
+  {
+    label: "24/7 Support",
+    description: "We're here for you, anytime.",
     icon: (
       <>
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        <path d="M4 13a8 8 0 0 1 16 0" />
+        <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
+        <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
       </>
     ),
-  },
-  {
-    label: "Quick & Easy",
-    description: "Book your car in just a few clicks.",
-    icon: <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
   },
 ];
 
@@ -91,7 +91,7 @@ function FeatureItem({
   );
 }
 
-export default function DesktopLogin() {
+export default function DesktopSignup() {
   return (
     <div style={pageShellStyle}>
       <section
@@ -105,14 +105,14 @@ export default function DesktopLogin() {
       >
         <ThemedLogo variant="dark" />
 
-        <div style={{ position: "relative", zIndex: 1, marginTop: 78, maxWidth: 520 }}>
-          <h1 style={{ margin: 0, fontSize: 62, lineHeight: 0.98, fontWeight: 700, color: "#111827" }}>
-            Welcome Back.
+        <div style={{ position: "relative", zIndex: 1, marginTop: 78, maxWidth: 430 }}>
+          <h1 style={{ margin: 0, fontSize: 66, lineHeight: 0.98, fontWeight: 700, color: "#111827" }}>
+            Drive More.
             <br />
-            Hit the road.
+            Worry Less.
           </h1>
           <p style={{ margin: "26px 0 0", color: "#4b5563", fontSize: 16, lineHeight: 1.72, maxWidth: 390 }}>
-            Sign in to your account and continue your journey with premium rentals, fast booking, and reliable support.
+            Join Qent and get access to premium vehicles, flexible rentals, and exceptional service wherever you go.
           </p>
         </div>
 
@@ -138,7 +138,7 @@ export default function DesktopLogin() {
             backdropFilter: "blur(10px)",
           }}
         >
-          <LoginForm maxWidth={560} />
+          <SignupForm />
         </div>
       </section>
     </div>
