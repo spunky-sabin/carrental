@@ -2,12 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 type SignupFormProps = {
   compact?: boolean;
 };
+
+declare global {
+  interface Window {
+    google: any;
+    __google_gsi_initialized?: boolean;
+    __google_gsi_callback?: (response: any) => void;
+  }
+}
 
 const formShellStyle = (compact: boolean): CSSProperties => ({
   width: "100%",
@@ -59,16 +67,29 @@ function Field({
   placeholder,
   type = "text",
   trailing,
+  value,
+  onChange,
+  disabled,
 }: {
   icon: ReactNode;
   placeholder: string;
   type?: string;
   trailing?: ReactNode;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disabled?: boolean;
 }) {
   return (
     <div style={inputRowStyle(false)}>
       <div style={iconStyle}>{icon}</div>
-      <input type={type} placeholder={placeholder} style={inputStyle} />
+      <input
+        type={type}
+        placeholder={placeholder}
+        style={inputStyle}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
       {trailing}
     </div>
   );
@@ -79,53 +100,31 @@ function CompactField({
   placeholder,
   type = "text",
   trailing,
+  value,
+  onChange,
+  disabled,
 }: {
   icon: ReactNode;
   placeholder: string;
   type?: string;
   trailing?: ReactNode;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disabled?: boolean;
 }) {
   return (
     <div style={inputRowStyle(true)}>
       <div style={iconStyle}>{icon}</div>
-      <input type={type} placeholder={placeholder} style={inputStyle} />
+      <input
+        type={type}
+        placeholder={placeholder}
+        style={inputStyle}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
       {trailing}
     </div>
-  );
-}
-
-function SocialButton({
-  label,
-  iconSrc,
-  iconAlt,
-  compact,
-}: {
-  label: string;
-  iconSrc: string;
-  iconAlt: string;
-  compact: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        height: compact ? 56 : 62,
-        borderRadius: 14,
-        border: "1px solid #d7dee8",
-        background: "#ffffff",
-        color: "#111827",
-        fontSize: compact ? 15 : 16,
-        fontWeight: 500,
-        cursor: "pointer",
-      }}
-    >
-      <Image src={iconSrc} alt={iconAlt} width={20} height={20} />
-      {label}
-    </button>
   );
 }
 
@@ -172,10 +171,12 @@ function CountryField({
   compact,
   value,
   onChange,
+  disabled,
 }: {
   compact: boolean;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div style={inputRowStyle(compact)}>
@@ -199,6 +200,7 @@ function CountryField({
         aria-label="Country"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
         style={{
           ...inputStyle,
           appearance: "none",
@@ -252,10 +254,109 @@ function PasswordIcon() {
 export default function SignupForm({ compact = false }: SignupFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [country, setCountry] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const FieldComponent = compact ? CompactField : Field;
 
+  useEffect(() => {
+    const handleCredentialResponse = async (response: any) => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = "/home";
+        } else {
+          setError(data.error || "Google sign in failed.");
+        }
+      } catch (err) {
+        console.error("Google signup error:", err);
+        setError("An error occurred during Google sign in.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+    const initGoogle = () => {
+      if (!clientId) return; // Skip if no valid client ID is configured
+      if (window.google) {
+        window.__google_gsi_callback = handleCredentialResponse;
+        if (!window.__google_gsi_initialized) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: any) => {
+              if (typeof window.__google_gsi_callback === "function") {
+                window.__google_gsi_callback(response);
+              }
+            },
+          });
+          window.__google_gsi_initialized = true;
+        }
+
+        const btn = document.getElementById("google-signup-btn");
+        if (btn) {
+          window.google.accounts.id.renderButton(
+            btn,
+            { theme: "outline", size: "large", width: compact ? 300 : 560 }
+          );
+        }
+      }
+    };
+
+    if (window.google) {
+      initGoogle();
+    } else {
+      const interval = setInterval(() => {
+        if (window.google) {
+          initGoogle();
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [compact]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!name || !email || !password) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, country }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = "/home";
+      } else {
+        setError(data.error || "Failed to create account.");
+      }
+    } catch (err) {
+      console.error("Signup form submission error:", err);
+      setError("An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <form style={formShellStyle(compact)} onSubmit={(event) => event.preventDefault()}>
+    <form style={formShellStyle(compact)} onSubmit={handleSubmit}>
       <div style={{ textAlign: "center", marginBottom: compact ? 26 : 32 }}>
         <h2
           style={{
@@ -274,41 +375,76 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
         </p>
       </div>
 
+      {error && (
+        <div
+          style={{
+            color: "#ef4444",
+            backgroundColor: "#fef2f2",
+            padding: "12px 16px",
+            borderRadius: 12,
+            fontSize: 14.5,
+            marginBottom: 22,
+            textAlign: "center",
+            border: "1px solid #fee2e2",
+            fontWeight: 500,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <div style={{ display: "grid", gap: compact ? 14 : 18 }}>
-        <FieldComponent icon={<NameIcon />} placeholder="Full Name" />
-        <FieldComponent icon={<EmailIcon />} placeholder="Email Address" type="email" />
+        <FieldComponent
+          icon={<NameIcon />}
+          placeholder="Full Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={loading}
+        />
+        <FieldComponent
+          icon={<EmailIcon />}
+          placeholder="Email Address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+        />
         <FieldComponent
           icon={<PasswordIcon />}
           placeholder="Password"
           type={showPassword ? "text" : "password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
           trailing={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
         />
-        <CountryField compact={compact} value={country} onChange={setCountry} />
+        <CountryField compact={compact} value={country} onChange={setCountry} disabled={loading} />
       </div>
 
       <button
         type="submit"
+        disabled={loading}
         style={{
           ...actionButtonBase(compact),
           marginTop: compact ? 18 : 24,
           border: "none",
-          background: "#111827",
+          background: loading ? "#4b5563" : "#111827",
           color: "#ffffff",
           boxShadow: "0 20px 34px rgba(15, 23, 42, 0.12)",
+          cursor: loading ? "not-allowed" : "pointer",
         }}
       >
-        Sign up
+        {loading ? "Creating account..." : "Sign up"}
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 18, margin: compact ? "22px 0 18px" : "28px 0 22px" }}>
         <div style={{ flex: 1, height: 1, background: "#d7dee8" }} />
-        <span style={{ color: "#6b7280", fontSize: compact ? 14 : 15, whiteSpace: "nowrap" }}>Or</span>
+        <span style={{ color: "#6b7280", fontSize: compact ? 14 : 15, whiteSpace: "nowrap" }}>Or sign up with</span>
         <div style={{ flex: 1, height: 1, background: "#d7dee8" }} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <SocialButton label="Apple" iconSrc="/apple-icon.svg" iconAlt="Apple" />
-        <SocialButton label="Google" iconSrc="/google-icon.svg" iconAlt="Google" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div id="google-signup-btn" style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
       </div>
 
       <p style={{ margin: compact ? "22px 0 0" : "30px 0 0", textAlign: "center", color: "#6b7280", fontSize: compact ? 14 : 15 }}>

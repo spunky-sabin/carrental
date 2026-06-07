@@ -1,7 +1,14 @@
+import { getSessionUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import DesktopLogin from "@/components/DesktopLogin";
 import MobileLogin from "@/components/MobileLogin";
 
-export default function Home() {
+export default async function Home() {
+  const session = await getSessionUser();
+  if (session) {
+    redirect("/home");
+  }
+
   return (
     <main>
       <div className="hidden lg:block">

@@ -2,12 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 
 type LoginFormProps = {
   maxWidth?: CSSProperties["maxWidth"];
 };
+
+declare global {
+  interface Window {
+    google: any;
+    __google_gsi_initialized?: boolean;
+    __google_gsi_callback?: (response: any) => void;
+  }
+}
 
 const formShellStyle = (maxWidth: CSSProperties["maxWidth"]): CSSProperties => ({
   width: "100%",
@@ -51,37 +59,109 @@ const actionButtonBase: CSSProperties = {
 
 const iconStroke = "#6b7280";
 
-function SocialButton({ label, iconSrc, iconAlt }: { label: string; iconSrc: string; iconAlt: string }) {
-  return (
-    <button
-      type="button"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        height: 62,
-        borderRadius: 14,
-        border: "1px solid #d7dee8",
-        background: "#ffffff",
-        color: "#111827",
-        fontSize: 16,
-        fontWeight: 500,
-        cursor: "pointer",
-      }}
-    >
-      <Image src={iconSrc} alt={iconAlt} width={20} height={20} />
-      {label}
-    </button>
-  );
-}
-
 export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handleCredentialResponse = async (response: any) => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = "/home";
+        } else {
+          setError(data.error || "Google sign in failed.");
+        }
+      } catch (err) {
+        console.error("Google login error:", err);
+        setError("An error occurred during Google sign in.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+    const initGoogle = () => {
+      if (!clientId) return; // Skip if no valid client ID is configured
+      if (window.google) {
+        window.__google_gsi_callback = handleCredentialResponse;
+        if (!window.__google_gsi_initialized) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: any) => {
+              if (typeof window.__google_gsi_callback === "function") {
+                window.__google_gsi_callback(response);
+              }
+            },
+          });
+          window.__google_gsi_initialized = true;
+        }
+
+        const btn = document.getElementById("google-signin-btn");
+        if (btn) {
+          window.google.accounts.id.renderButton(
+            btn,
+            { theme: "outline", size: "large", width: 560 }
+          );
+        }
+      }
+    };
+
+    if (window.google) {
+      initGoogle();
+    } else {
+      const interval = setInterval(() => {
+        if (window.google) {
+          initGoogle();
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = "/home";
+      } else {
+        setError(data.error || "Invalid email or password.");
+      }
+    } catch (err) {
+      console.error("Login form submission error:", err);
+      setError("Failed to sign in. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <form style={formShellStyle(maxWidth)} onSubmit={(event) => event.preventDefault()}>
+    <form style={formShellStyle(maxWidth)} onSubmit={handleSubmit}>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <h2
           style={{
@@ -100,13 +180,38 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
         </p>
       </div>
 
+      {error && (
+        <div
+          style={{
+            color: "#ef4444",
+            backgroundColor: "#fef2f2",
+            padding: "12px 16px",
+            borderRadius: 12,
+            fontSize: 14.5,
+            marginBottom: 22,
+            textAlign: "center",
+            border: "1px solid #fee2e2",
+            fontWeight: 500,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <div style={{ display: "grid", gap: 18 }}>
         <div style={inputRowStyle}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={iconStroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="5" width="18" height="14" rx="3" />
             <path d="m4 7 8 6 8-6" />
           </svg>
-          <input type="text" placeholder="Email Address" style={inputStyle} />
+          <input
+            type="email"
+            placeholder="Email Address"
+            style={inputStyle}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+          />
         </div>
 
         <div style={inputRowStyle}>
@@ -114,7 +219,14 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
             <rect x="4" y="10" width="16" height="11" rx="3" />
             <path d="M8 10V7a4 4 0 1 1 8 0v3" />
           </svg>
-          <input type={showPassword ? "text" : "password"} placeholder="Password" style={inputStyle} />
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="Password"
+            style={inputStyle}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+          />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
@@ -189,26 +301,27 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
 
       <button
         type="submit"
+        disabled={loading}
         style={{
           ...actionButtonBase,
           border: "none",
-          background: "#111827",
+          background: loading ? "#4b5563" : "#111827",
           color: "#ffffff",
           boxShadow: "0 20px 34px rgba(15, 23, 42, 0.12)",
+          cursor: loading ? "not-allowed" : "pointer",
         }}
       >
-        Login
+        {loading ? "Logging in..." : "Login"}
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 18, margin: "28px 0 22px" }}>
         <div style={{ flex: 1, height: 1, background: "#d7dee8" }} />
-        <span style={{ color: "#6b7280", fontSize: 15, whiteSpace: "nowrap" }}>Or</span>
+        <span style={{ color: "#6b7280", fontSize: 15, whiteSpace: "nowrap" }}>Or sign in with</span>
         <div style={{ flex: 1, height: 1, background: "#d7dee8" }} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <SocialButton label="Apple" iconSrc="/apple-icon.svg" iconAlt="Apple" />
-        <SocialButton label="Google" iconSrc="/google-icon.svg" iconAlt="Google" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div id="google-signin-btn" style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
       </div>
 
       <p style={{ margin: "30px 0 0", textAlign: "center", color: "#6b7280", fontSize: 15 }}>
@@ -220,3 +333,4 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
     </form>
   );
 }
+

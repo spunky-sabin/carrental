@@ -1,6 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
-import Image from "next/image";
-
+import type { CSSProperties } from "react";
 import LoginForm from "@/components/LoginForm";
 import ThemedLogo from "@/components/ThemedLogo";
 
@@ -10,38 +8,6 @@ const mobileShellStyle: CSSProperties = {
   overflowX: "hidden",
   background: "linear-gradient(180deg, #eef2f6 0%, #f8fafc 42%, #ffffff 100%)",
 };
-
-
-function FeatureChip({ label, icon }: { label: string; icon: ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        borderRadius: 16,
-        border: "1px solid rgba(203, 213, 225, 0.8)",
-        background: "rgba(255,255,255,0.9)",
-        padding: "12px 14px",
-        boxShadow: "0 12px 24px rgba(15, 23, 42, 0.05)",
-      }}
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#334155"
-        strokeWidth="1.65"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {icon}
-      </svg>
-      <span style={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}>{label}</span>
-    </div>
-  );
-}
 
 export default function MobileLogin() {
   return (
