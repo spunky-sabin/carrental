@@ -3,10 +3,27 @@ import { query } from '@/lib/db';
 import { signJWT } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+type LoginUserRow = {
+  id: string;
+  full_name: string;
+  email: string;
+  password_hash: string;
+  phone: string | null;
+  profile_image: string | null;
+  address: string | null;
+  date_of_birth: string | null;
+  role: string;
+  is_verified: boolean;
+  created_at: string;
+};
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const formData = await request.formData();
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -17,7 +34,7 @@ export async function POST(request: Request) {
 
     const emailClean = email.toLowerCase().trim();
 
-    const res = await query(
+    const res = await query<LoginUserRow>(
       `SELECT id, full_name, email, password_hash, profile_image, address, date_of_birth, role, is_verified, created_at
        FROM users WHERE email = $1`,
       [emailClean]
@@ -42,7 +59,7 @@ export async function POST(request: Request) {
 
     // Create session token
     const token = await signJWT({
-      userId: user.id,
+      userId: String(user.id),
       email: user.email,
       name: user.full_name,
       role: user.role,
@@ -58,7 +75,9 @@ export async function POST(request: Request) {
       path: '/',
     });
 
-    return NextResponse.json({
+    console.log('Login API: Cookie set successfully with token for user:', user.id);
+
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -73,8 +92,19 @@ export async function POST(request: Request) {
         created_at: user.created_at,
       },
     });
-  } catch (error: any) {
 
-    return NextResponse.json({ error: error.message || 'Something went wrong' }, { status: 500 });
+    // Also set cookie on the response for extra reliability
+    response.cookies.set('session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    return response;
+  } catch (error: unknown) {
+
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Something went wrong' }, { status: 500 });
   }
 }

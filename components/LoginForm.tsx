@@ -1,21 +1,13 @@
 'use client';
 
-import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 
 type LoginFormProps = {
   maxWidth?: CSSProperties["maxWidth"];
 };
-
-declare global {
-  interface Window {
-    google: any;
-    __google_gsi_initialized?: boolean;
-    __google_gsi_callback?: (response: any) => void;
-  }
-}
 
 const formShellStyle = (maxWidth: CSSProperties["maxWidth"]): CSSProperties => ({
   width: "100%",
@@ -60,6 +52,7 @@ const actionButtonBase: CSSProperties = {
 const iconStroke = "#6b7280";
 
 export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [email, setEmail] = useState("");
@@ -68,7 +61,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const handleCredentialResponse = async (response: any) => {
+    const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
       setLoading(true);
       setError("");
       try {
@@ -79,7 +72,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
         });
         const data = await res.json();
         if (data.success) {
-          window.location.href = "/home";
+          router.push("/home");
         } else {
           setError(data.error || "Google sign in failed.");
         }
@@ -100,7 +93,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
         if (!window.__google_gsi_initialized) {
           window.google.accounts.id.initialize({
             client_id: clientId,
-            callback: (response: any) => {
+            callback: (response: GoogleCredentialResponse) => {
               if (typeof window.__google_gsi_callback === "function") {
                 window.__google_gsi_callback(response);
               }
@@ -110,12 +103,42 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
         }
 
         const btn = document.getElementById("google-signin-btn");
-        if (btn) {
-          window.google.accounts.id.renderButton(
-            btn,
-            { theme: "outline", size: "large", width: 560 }
-          );
-        }
+        if (!btn) return;
+
+        const getSize = () => {
+          if (typeof window === 'undefined') return 'large';
+          const w = window.innerWidth;
+          if (w < 420) return 'small';
+          if (w < 768) return 'medium';
+          return 'large';
+        };
+
+        const renderButton = () => {
+          if (!window.google?.accounts?.id) return;
+          const size = getSize();
+          const options: Record<string, unknown> = { theme: 'outline', size };
+          // Only set width for large desktop to keep layout stable
+          if (size === 'large') options.width = 560;
+          // Clear previous children to ensure re-render works reliably
+          btn.innerHTML = '';
+          window.google.accounts.id.renderButton(btn, options);
+        };
+
+        renderButton();
+
+        // Re-render on resize with debounce
+        let resizeTimer: number | undefined;
+        const onResize = () => {
+          if (resizeTimer) window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(() => {
+            renderButton();
+          }, 150);
+        };
+        window.addEventListener('resize', onResize);
+        // cleanup will be returned by useEffect
+        return () => {
+          window.removeEventListener('resize', onResize);
+        };
       }
     };
 
@@ -141,13 +164,19 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
     setLoading(true);
     setError("");
     try {
+      const formData = new FormData();
+      formData.append('email', email);
+      formData.append('password', password);
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: formData,
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.success) {
+        console.log('Login successful, redirecting to /home');
+        // Use window.location for full page reload to ensure cookie is set
         window.location.href = "/home";
       } else {
         setError(data.error || "Invalid email or password.");
@@ -333,4 +362,3 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
     </form>
   );
 }
-

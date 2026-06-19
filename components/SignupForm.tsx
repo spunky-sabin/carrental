@@ -1,6 +1,5 @@
 'use client';
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -8,14 +7,6 @@ import type { CSSProperties, ReactNode } from "react";
 type SignupFormProps = {
   compact?: boolean;
 };
-
-declare global {
-  interface Window {
-    google: any;
-    __google_gsi_initialized?: boolean;
-    __google_gsi_callback?: (response: any) => void;
-  }
-}
 
 const formShellStyle = (compact: boolean): CSSProperties => ({
   width: "100%",
@@ -263,7 +254,7 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
   const FieldComponent = compact ? CompactField : Field;
 
   useEffect(() => {
-    const handleCredentialResponse = async (response: any) => {
+    const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
       setLoading(true);
       setError("");
       try {
@@ -295,7 +286,7 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
         if (!window.__google_gsi_initialized) {
           window.google.accounts.id.initialize({
             client_id: clientId,
-            callback: (response: any) => {
+            callback: (response: GoogleCredentialResponse) => {
               if (typeof window.__google_gsi_callback === "function") {
                 window.__google_gsi_callback(response);
               }
@@ -305,12 +296,38 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
         }
 
         const btn = document.getElementById("google-signup-btn");
-        if (btn) {
-          window.google.accounts.id.renderButton(
-            btn,
-            { theme: "outline", size: "large", width: compact ? 300 : 560 }
-          );
-        }
+        if (!btn) return;
+
+        const getSize = () => {
+          if (typeof window === 'undefined') return 'large';
+          const w = window.innerWidth;
+          if (w < 420) return 'small';
+          if (w < 768) return 'medium';
+          return 'large';
+        };
+
+        const renderButton = () => {
+          if (!window.google?.accounts?.id) return;
+          const size = getSize();
+          const options: Record<string, unknown> = { theme: 'outline', size };
+          if (size === 'large') options.width = compact ? 300 : 560;
+          btn.innerHTML = '';
+          window.google.accounts.id.renderButton(btn, options);
+        };
+
+        renderButton();
+
+        let resizeTimer: number | undefined;
+        const onResize = () => {
+          if (resizeTimer) window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(() => {
+            renderButton();
+          }, 150);
+        };
+        window.addEventListener('resize', onResize);
+        return () => {
+          window.removeEventListener('resize', onResize);
+        };
       }
     };
 

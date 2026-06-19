@@ -6,7 +6,7 @@ export async function POST() {
     const cookieStore = await cookies();
     cookieStore.delete('session');
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch {
 
     return NextResponse.json({ error: 'Failed to clear session' }, { status: 500 });
   }

@@ -4,6 +4,15 @@ import { signJWT } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 
+type SignupUserRow = {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  address: string | null;
+  created_at: string;
+};
+
 export async function POST(request: Request) {
   try {
     const { name, email, password, country } = await request.json();
@@ -18,7 +27,7 @@ export async function POST(request: Request) {
     const emailClean = email.toLowerCase().trim();
 
   
-    const userCheck = await query('SELECT id FROM users WHERE email = $1', [emailClean]);
+    const userCheck = await query<{ id: string }>('SELECT id FROM users WHERE email = $1', [emailClean]);
     if (userCheck.rows.length > 0) {
       return NextResponse.json(
         { error: 'A user with this email already exists' },
@@ -31,7 +40,7 @@ export async function POST(request: Request) {
     const passwordHash = await bcrypt.hash(password, salt);
 
 
-    const newUser = await query(
+    const newUser = await query<SignupUserRow>(
       `INSERT INTO users (full_name, email, password_hash, address, role, is_verified)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, full_name, email, role, address, created_at`,
@@ -49,7 +58,7 @@ export async function POST(request: Request) {
 
     
     const token = await signJWT({
-      userId: user.id,
+      userId: String(user.id),
       email: user.email,
       name: user.full_name,
       role: user.role,
@@ -66,10 +75,10 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, user });
-  } catch (error: any) {
+  } catch (error: unknown) {
 
     return NextResponse.json(
-      { error: error.message || 'Something went wrong' },
+      { error: error instanceof Error ? error.message : 'Something went wrong' },
       { status: 500 }
     );
   }

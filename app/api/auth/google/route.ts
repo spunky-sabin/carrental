@@ -4,6 +4,19 @@ import { signJWT } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 
+type GoogleUserRow = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  profile_image: string | null;
+  address: string | null;
+  date_of_birth: string | null;
+  role: string;
+  is_verified: boolean;
+  created_at: string;
+};
+
 export async function POST(request: Request) {
   try {
     const { credential } = await request.json();
@@ -19,8 +32,6 @@ export async function POST(request: Request) {
       `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
     );
     if (!googleRes.ok) {
-      const errorText = await googleRes.text();
-
       return NextResponse.json(
         { error: 'Failed to verify Google token' },
         { status: 400 }
@@ -41,7 +52,7 @@ export async function POST(request: Request) {
     const fullName = name || [given_name, family_name].filter(Boolean).join(' ') || emailClean.split('@')[0];
 
     let user;
-    const userCheck = await query(
+    const userCheck = await query<GoogleUserRow>(
       `SELECT id, full_name, email, phone, profile_image, address, date_of_birth, role, is_verified, created_at
        FROM users WHERE email = $1`,
       [emailClean]
@@ -49,7 +60,7 @@ export async function POST(request: Request) {
 
     if (userCheck.rows.length > 0) {
       if (picture && userCheck.rows[0].profile_image !== picture) {
-        const updated = await query(
+        const updated = await query<GoogleUserRow>(
           `UPDATE users SET profile_image = $1 WHERE id = $2
            RETURNING id, full_name, email, phone, profile_image, address, date_of_birth, role, is_verified, created_at`,
           [picture, userCheck.rows[0].id]
@@ -63,7 +74,7 @@ export async function POST(request: Request) {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(tempPassword, salt);
 
-      const newUser = await query(
+      const newUser = await query<GoogleUserRow>(
         `INSERT INTO users (full_name, email, password_hash, profile_image, role, is_verified)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, full_name, email, phone, profile_image, address, date_of_birth, role, is_verified, created_at`,
@@ -74,7 +85,7 @@ export async function POST(request: Request) {
 
      
     const token = await signJWT({
-      userId: user.id,
+      userId: String(user.id),
       email: user.email,
       name: user.full_name,
       role: user.role,
@@ -90,10 +101,10 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, user });
-  } catch (error: any) {
+  } catch (error: unknown) {
 
     return NextResponse.json(
-      { error: error.message || 'Something went wrong' },
+      { error: error instanceof Error ? error.message : 'Something went wrong' },
       { status: 500 }
     );
   }

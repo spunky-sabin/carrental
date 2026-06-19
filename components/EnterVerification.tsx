@@ -121,7 +121,7 @@ function DeleteKey({ onClick }: { onClick: () => void }) {
   );
 }
 
-export default function EnterVerification() {
+export default function EnterVerification({ standalone = true }: { standalone?: boolean }) {
   const [digits, setDigits] = useState(["6", "9", "0", ""]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -267,156 +267,163 @@ export default function EnterVerification() {
     focusInput(Math.min(index + pastedDigits.length, digits.length - 1));
   };
 
+  const content = (
+    <div style={standalone ? pageWidthStyle : { width: "100%" }}>
+      <section style={{ ...topSectionStyle, paddingInline: standalone ? "clamp(18px, 5vw, 22px)" : 0 }}>
+        {standalone && <BrandLockup />}
+
+        <div style={{ paddingTop: standalone ? "clamp(56px, 20vw, 104px)" : 0, textAlign: "center" }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(30px, 8vw, 34px)",
+              lineHeight: 1.15,
+              fontWeight: 700,
+              color: "#202020",
+            }}
+          >
+            Enter verification code
+          </h1>
+
+          <p
+            style={{
+              margin: "18px 0 0",
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "#878787",
+            }}
+          >
+            We have send a Code to : +100******00
+          </p>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: "clamp(10px, 3vw, 20px)",
+              marginTop: "clamp(28px, 8vw, 42px)",
+              paddingInline: standalone ? "clamp(0px, 6vw, 28px)" : 0,
+            }}
+          >
+            {digits.map((digit, index) => {
+              const isActive = index === highlightedIndex;
+
+              return (
+                <input
+                  key={index}
+                  ref={(element) => {
+                    inputRefs.current[index] = element;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete={index === 0 ? "one-time-code" : "off"}
+                  enterKeyHint="done"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(event) => handleInputChange(index, event)}
+                  onKeyDown={(event) => handleInputKeyDown(index, event)}
+                  onFocus={(event) => {
+                    setFocusedIndex(index);
+                    event.currentTarget.select();
+                  }}
+                  onPaste={(event) => handlePaste(index, event)}
+                  aria-label={`Verification digit ${index + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "clamp(56px, 14vw, 62px)",
+                    borderRadius: 12,
+                    border: `1px solid ${isActive ? "#d6d6d6" : "#d9d9d9"}`,
+                    background: "#ffffff",
+                    boxShadow: isActive ? "inset 0 0 0 1px #efefef" : "0 2px 6px rgba(15, 23, 42, 0.03)",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: "#111111",
+                    textAlign: "center",
+                    outline: "none",
+                    caretColor: "#111111",
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            style={{
+              marginTop: 24,
+              width: "100%",
+              height: "clamp(58px, 15vw, 62px)",
+              borderRadius: 999,
+              border: "none",
+              background: "#232b2d",
+              color: "#ffffff",
+              fontSize: 18,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 18px 28px rgba(35, 43, 45, 0.12)",
+            }}
+          >
+            Continue
+          </button>
+
+          <p
+            style={{
+              margin: "24px 0 0",
+              fontSize: 14,
+              lineHeight: 1.5,
+              color: "#909090",
+            }}
+          >
+            Didn&apos;t receive the OTP? Resend.
+          </p>
+        </div>
+      </section>
+
+      <section
+        style={{
+          marginTop: standalone ? "auto" : 40,
+          background: "#f1f1f1",
+          borderRadius: 28,
+          padding: "18px clamp(16px, 4vw, 20px) 16px",
+          border: "1px solid #ebebeb",
+        }}
+      >
+        <div style={{ textAlign: "center", color: "#8c8c8c" }}>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>Form Message</p>
+          <p style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.45 }}>{code || "----"}</p>
+        </div>
+
+        <div style={{ ...keypadGridStyle, marginTop: 22 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+            <button
+              key={digit}
+              type="button"
+              onClick={() => pushDigit(String(digit))}
+              style={keyButtonStyle}
+            >
+              {digit}
+            </button>
+          ))}
+
+          <div />
+
+          <button type="button" onClick={() => pushDigit("0")} style={keyButtonStyle}>
+            0
+          </button>
+
+          <DeleteKey onClick={deleteDigit} />
+        </div>
+      </section>
+    </div>
+  );
+
+  if (!standalone) {
+    return content;
+  }
+
   return (
     <div style={screenStyle}>
-      <div style={pageWidthStyle}>
-        <section style={{ ...topSectionStyle, paddingInline: "clamp(18px, 5vw, 22px)" }}>
-          <BrandLockup />
-
-          <div style={{ paddingTop: "clamp(56px, 20vw, 104px)", textAlign: "center" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "clamp(30px, 8vw, 34px)",
-                lineHeight: 1.15,
-                fontWeight: 700,
-                color: "#202020",
-              }}
-            >
-              Enter verification code
-            </h1>
-
-            <p
-              style={{
-                margin: "18px 0 0",
-                fontSize: 14,
-                lineHeight: 1.6,
-                color: "#878787",
-              }}
-            >
-              We have send a Code to : +100******00
-            </p>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                gap: "clamp(10px, 3vw, 20px)",
-                marginTop: "clamp(28px, 8vw, 42px)",
-                paddingInline: "clamp(0px, 6vw, 28px)",
-              }}
-            >
-              {digits.map((digit, index) => {
-                const isActive = index === highlightedIndex;
-
-                return (
-                  <input
-                    key={index}
-                    ref={(element) => {
-                      inputRefs.current[index] = element;
-                    }}
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete={index === 0 ? "one-time-code" : "off"}
-                    enterKeyHint="done"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(event) => handleInputChange(index, event)}
-                    onKeyDown={(event) => handleInputKeyDown(index, event)}
-                    onFocus={(event) => {
-                      setFocusedIndex(index);
-                      event.currentTarget.select();
-                    }}
-                    onPaste={(event) => handlePaste(index, event)}
-                    aria-label={`Verification digit ${index + 1}`}
-                    style={{
-                      width: "100%",
-                      height: "clamp(56px, 14vw, 62px)",
-                      borderRadius: 12,
-                      border: `1px solid ${isActive ? "#d6d6d6" : "#d9d9d9"}`,
-                      background: "#ffffff",
-                      boxShadow: isActive ? "inset 0 0 0 1px #efefef" : "0 2px 6px rgba(15, 23, 42, 0.03)",
-                      fontSize: 18,
-                      fontWeight: 700,
-                      color: "#111111",
-                      textAlign: "center",
-                      outline: "none",
-                      caretColor: "#111111",
-                    }}
-                  />
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              style={{
-                marginTop: 24,
-                width: "100%",
-                height: "clamp(58px, 15vw, 62px)",
-                borderRadius: 999,
-                border: "none",
-                background: "#232b2d",
-                color: "#ffffff",
-                fontSize: 18,
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 18px 28px rgba(35, 43, 45, 0.12)",
-              }}
-            >
-              Continue
-            </button>
-
-            <p
-              style={{
-                margin: "24px 0 0",
-                fontSize: 14,
-                lineHeight: 1.5,
-                color: "#909090",
-              }}
-            >
-              Didn&apos;t receive the OTP? Resend.
-            </p>
-          </div>
-        </section>
-
-        <section
-          style={{
-            marginTop: "auto",
-            background: "#f1f1f1",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            padding: "18px clamp(16px, 4vw, 20px) 16px",
-            borderTop: "1px solid #ebebeb",
-          }}
-        >
-          <div style={{ textAlign: "center", color: "#8c8c8c" }}>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>Form Message</p>
-            <p style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.45 }}>{code || "----"}</p>
-          </div>
-
-          <div style={{ ...keypadGridStyle, marginTop: 22 }}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-              <button
-                key={digit}
-                type="button"
-                onClick={() => pushDigit(String(digit))}
-                style={keyButtonStyle}
-              >
-                {digit}
-              </button>
-            ))}
-
-            <div />
-
-            <button type="button" onClick={() => pushDigit("0")} style={keyButtonStyle}>
-              0
-            </button>
-
-            <DeleteKey onClick={deleteDigit} />
-          </div>
-        </section>
-      </div>
+      {content}
     </div>
   );
 }

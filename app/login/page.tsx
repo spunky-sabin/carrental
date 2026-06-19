@@ -1,10 +1,10 @@
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import DesktopSignup from "@/components/DesktopSignup";
-import MobileSignup from "@/components/MobileSignup";
+import DesktopLogin from "@/components/DesktopLogin";
+import MobileLogin from "@/components/MobileLogin";
 import { AppScreen } from "@/components/app/AppUI";
 
-export default async function SignupPage() {
+export default async function LoginPage() {
   const session = await getSessionUser();
   if (session) {
     redirect("/home");
@@ -13,10 +13,10 @@ export default async function SignupPage() {
   return (
     <AppScreen profile={null}>
       <div className="hidden lg:block">
-        <DesktopSignup />
+        <DesktopLogin />
       </div>
       <div className="lg:hidden">
-        <MobileSignup />
+        <MobileLogin />
       </div>
     </AppScreen>
   );
