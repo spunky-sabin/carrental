@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 type SignupFormProps = {
@@ -250,6 +250,7 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   const FieldComponent = compact ? CompactField : Field;
 
@@ -295,7 +296,7 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
           window.__google_gsi_initialized = true;
         }
 
-        const btn = document.getElementById("google-signup-btn");
+        const btn = googleBtnRef.current;
         if (!btn) return;
 
         const getSize = () => {
@@ -461,7 +462,7 @@ export default function SignupForm({ compact = false }: SignupFormProps) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div id="google-signup-btn" style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
+        <div ref={googleBtnRef} style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
       </div>
 
       <p style={{ margin: compact ? "22px 0 0" : "30px 0 0", textAlign: "center", color: "#6b7280", fontSize: compact ? 14 : 15 }}>

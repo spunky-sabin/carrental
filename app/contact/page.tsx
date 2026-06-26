@@ -54,7 +54,7 @@ export default function ContactPage() {
 
         {submitted ? (
           <div style={{ background: "#eef9f1", border: "1px solid #ccebd4", borderRadius: 20, padding: 32, textAlign: "center", color: "#226447" }}>
-            <span style={{ fontSize: 32 }}>🎉</span>
+            <span style={{ fontSize: 32 }}></span>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "12px 0 6px" }}>Message Sent Successfully!</h2>
             <p style={{ margin: 0, fontSize: 14 }}>Thank you for reaching out. A premium relations expert will respond to you within 24 hours.</p>
             <button onClick={() => setSubmitted(false)} style={{ marginTop: 20, padding: "10px 20px", borderRadius: 12, background: "var(--q-ink)", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer" }}>Send Another Message</button>

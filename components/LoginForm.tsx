@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 
 type LoginFormProps = {
@@ -59,6 +59,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
@@ -102,7 +103,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
           window.__google_gsi_initialized = true;
         }
 
-        const btn = document.getElementById("google-signin-btn");
+        const btn = googleBtnRef.current;
         if (!btn) return;
 
         const getSize = () => {
@@ -350,7 +351,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div id="google-signin-btn" style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
+        <div ref={googleBtnRef} style={{ width: "100%", display: "flex", justifyContent: "center" }}></div>
       </div>
 
       <p style={{ margin: "30px 0 0", textAlign: "center", color: "#6b7280", fontSize: 15 }}>

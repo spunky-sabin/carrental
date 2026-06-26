@@ -429,18 +429,36 @@
   cursor: pointer;
 }
 
-.horizontalScroller {
-  display: flex;
-  gap: 14px;
-  overflow-x: auto;
-  padding: 16px 2px 4px;
-  margin-inline: -2px;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
+.carsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 16px 0;
 }
 
-.horizontalScroller::-webkit-scrollbar {
-  display: none;
+@media (min-width: 640px) {
+  .carsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(254px, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .carsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    padding: 24px 0;
+  }
+}
+
+.mobileOnly {
+  display: flex !important;
+}
+
+@media (min-width: 1024px) {
+  .mobileOnly {
+    display: none !important;
+  }
 }
 
 .brandChip {
@@ -476,39 +494,67 @@
 }
 
 .carCard {
-  min-width: 254px;
-  flex: 1;
-  scroll-snap-align: start;
-  border-radius: 30px;
+  border-radius: 20px;
   border: 1px solid rgba(32, 36, 38, 0.07);
   background: var(--q-card);
-  padding: 14px;
-  box-shadow: 0 20px 36px rgba(70, 73, 67, 0.1);
+  padding: 10px;
+  box-shadow: 0 10px 20px rgba(70, 73, 67, 0.08);
+  display: flex;
+  flex-direction: column;
 }
 
-@media (min-width: 1024px) {
-  .horizontalScroller {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
-    overflow: visible;
-    padding: 24px 0;
-  }
+@media (min-width: 768px) {
   .carCard {
-    min-width: 0;
-    max-width: none;
+    border-radius: 30px;
+    padding: 14px;
+    box-shadow: 0 20px 36px rgba(70, 73, 67, 0.1);
   }
 }
 
 .carImagePanel {
-  min-height: 128px;
-  border-radius: 24px;
-  padding: 12px;
+  height: 120px;
+  border-radius: 16px;
   position: relative;
   overflow: hidden;
-  display: flex;
-  align-items: flex-end;
+}
+
+@media (min-width: 768px) {
+  .carImagePanel {
+    height: 180px;
+    border-radius: 24px;
+  }
+}
+
+.carImageCover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 24px;
+}
+
+.carImageFallback {
+  width: 100%;
+  height: 100%;
+  align-items: center;
   justify-content: center;
+}
+
+.categoryBadge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 2;
 }
 
 .favoriteButton {
@@ -529,11 +575,18 @@
 }
 
 .carName {
-  margin: 14px 0 0;
-  font-size: 17px;
+  margin: 10px 0 0;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .carName {
+    margin: 14px 0 0;
+    font-size: 17px;
+  }
 }
 
 .carMetaRow {
@@ -564,8 +617,14 @@
 
 .price {
   color: var(--q-ink);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 900;
+}
+
+@media (min-width: 768px) {
+  .price {
+    font-size: 18px;
+  }
 }
 
 .price small {

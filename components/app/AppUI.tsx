@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import styles from "@/components/app/AppUI.module.css";
-import type { BrandItem, CarListing, UserProfile } from "@/components/app/types";
+import type { CarListing, UserProfile } from "@/components/app/types";
 import ThemedLogo from "@/components/ThemedLogo";
 import LogoutButton from "@/components/LogoutButton";
 
@@ -237,16 +237,45 @@ export function Icon({ name, size = 20, filled = false }: { name: IconName; size
   }
 }
 
+export type BrowseFilterConfig = {
+  // Data from DB
+  locations: string[];
+  categories: string[];
+  // Vehicle bar state
+  selectedLocation: string;
+  selectedCategory: string;
+  tripStart: string;
+  tripEnd: string;
+  onLocationChange: (v: string) => void;
+  onCategoryChange: (v: string) => void;
+  onTripStartChange: (v: string) => void;
+  onTripEndChange: (v: string) => void;
+  onSearch: () => void;
+  // Sidebar filter state
+  selectedFuelTypes: string[];
+  selectedTransmissions: string[];
+  selectedColors: string[];
+  minPrice: string;
+  maxPrice: string;
+  onFuelTypeToggle: (fuel: string) => void;
+  onTransmissionToggle: (t: string) => void;
+  onColorToggle: (c: string) => void;
+  onMinPriceChange: (v: string) => void;
+  onMaxPriceChange: (v: string) => void;
+};
+
 export function AppScreen({
   children,
   withNav = true,
   requireAuth = false,
   profile = null,
+  browseFilters,
 }: {
   children: ReactNode;
   withNav?: boolean;
   requireAuth?: boolean;
   profile?: UserProfile | null;
+  browseFilters?: BrowseFilterConfig;
 }) {
   const pathname = usePathname();
   const isBrowse = pathname === "/browse";
@@ -265,7 +294,17 @@ export function AppScreen({
         <main className={styles.desktopMain}>
           <DesktopTopNav profile={profile} />
           <div className={styles.glassCard}>
-            {isBrowse ? (
+            {isBrowse && browseFilters ? (
+              <>
+                <BrowseVehicleBar filters={browseFilters} />
+                <div className={styles.homeLayout}>
+                  <div className={styles.homeContent}>
+                    {children}
+                  </div>
+                  <FilterSidebar filters={browseFilters} />
+                </div>
+              </>
+            ) : isBrowse ? (
               <>
                 <BrowseVehicleBar />
                 <div className={styles.homeLayout}>
@@ -331,7 +370,7 @@ export function DesktopTopNav({ profile }: { profile?: UserProfile | null }) {
   );
 }
 
-export function BrowseVehicleBar() {
+export function BrowseVehicleBar({ filters }: { filters?: BrowseFilterConfig }) {
   return (
     <section className={styles.browseBar}>
       <div style={{ width: "100%", marginBottom: 12 }}>
@@ -339,46 +378,82 @@ export function BrowseVehicleBar() {
       </div>
       <div className={styles.filterGroup}>
         <label>Pickup Location</label>
-        <input type="text" placeholder="City, Airport or Zip" className={styles.filterInput} />
+        <select
+          className={styles.filterSelect}
+          value={filters?.selectedLocation ?? ""}
+          onChange={(e) => filters?.onLocationChange(e.target.value)}
+        >
+          <option value="">All Locations</option>
+          {(filters?.locations ?? []).map(loc => (
+            <option key={loc} value={loc}>{loc}</option>
+          ))}
+        </select>
       </div>
       <div className={styles.filterGroup}>
         <label>Vehicle Type</label>
-        <select className={styles.filterSelect}>
-          <option>All Vehicles</option>
-          <option>Sedan</option>
-          <option>SUV</option>
-          <option>Electric</option>
-          <option>Luxury</option>
+        <select
+          className={styles.filterSelect}
+          value={filters?.selectedCategory ?? ""}
+          onChange={(e) => filters?.onCategoryChange(e.target.value)}
+        >
+          <option value="">All Vehicles</option>
+          {(filters?.categories ?? []).map(cat => (
+            <option key={cat} value={cat} style={{ textTransform: "capitalize" }}>
+              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </option>
+          ))}
         </select>
       </div>
       <div className={styles.filterGroup}>
         <label>Trip Start</label>
-        <input type="date" className={styles.filterInput} />
+        <input
+          type="date"
+          className={styles.filterInput}
+          value={filters?.tripStart ?? ""}
+          onChange={(e) => filters?.onTripStartChange(e.target.value)}
+        />
       </div>
       <div className={styles.filterGroup}>
         <label>Trip End</label>
-        <input type="date" className={styles.filterInput} />
+        <input
+          type="date"
+          className={styles.filterInput}
+          value={filters?.tripEnd ?? ""}
+          onChange={(e) => filters?.onTripEndChange(e.target.value)}
+        />
       </div>
-      <button className={styles.primaryPill} style={{ height: 48 }}>
+      <button className={styles.primaryPill} style={{ height: 48 }} onClick={() => filters?.onSearch()}>
         Search
       </button>
     </section>
   );
 }
 
-export function FilterSidebar() {
-  const features = ["Radio", "GPS", "Fan", "Bluetooth", "AC"];
-  const brands = ["Tesla", "Lamborghini", "BMW", "Ferrari", "Mercedes", "Porsche"];
-  const fuelTypes = ["Electric", "Gasoline", "Hybrid", "Diesel"];
+export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
+  const fuelTypes = ["petrol", "diesel", "electric", "hybrid"];
+  const transmissions = ["automatic", "manual"];
+  const colors = ["White", "Black", "Silver", "Red", "Blue", "Grey"];
 
   return (
     <aside className={styles.rightSidebar}>
       <div className={styles.filterSection}>
         <h3>Price Range</h3>
         <div className={styles.priceRange}>
-          <input type="number" placeholder="Min" className={styles.filterInput} />
+          <input
+            type="number"
+            placeholder="Min"
+            className={styles.filterInput}
+            value={filters?.minPrice ?? ""}
+            onChange={(e) => filters?.onMinPriceChange(e.target.value)}
+          />
           <span>-</span>
-          <input type="number" placeholder="Max" className={styles.filterInput} />
+          <input
+            type="number"
+            placeholder="Max"
+            className={styles.filterInput}
+            value={filters?.maxPrice ?? ""}
+            onChange={(e) => filters?.onMaxPriceChange(e.target.value)}
+          />
         </div>
       </div>
 
@@ -387,29 +462,28 @@ export function FilterSidebar() {
         <div className={styles.checkboxList}>
           {fuelTypes.map(fuel => (
             <label key={fuel} className={styles.checkboxItem}>
-              <input type="checkbox" /> {fuel}
+              <input
+                type="checkbox"
+                checked={filters?.selectedFuelTypes.includes(fuel) ?? false}
+                onChange={() => filters?.onFuelTypeToggle(fuel)}
+              />
+              <span style={{ textTransform: "capitalize" }}>{fuel}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div className={styles.filterSection}>
-        <h3>Features</h3>
+        <h3>Transmission</h3>
         <div className={styles.checkboxList}>
-          {features.map(feature => (
-            <label key={feature} className={styles.checkboxItem}>
-              <input type="checkbox" /> {feature}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className={styles.filterSection}>
-        <h3>Brand</h3>
-        <div className={styles.checkboxList}>
-          {brands.map(brand => (
-            <label key={brand} className={styles.checkboxItem}>
-              <input type="checkbox" /> {brand}
+          {transmissions.map(t => (
+            <label key={t} className={styles.checkboxItem}>
+              <input
+                type="checkbox"
+                checked={filters?.selectedTransmissions.includes(t) ?? false}
+                onChange={() => filters?.onTransmissionToggle(t)}
+              />
+              <span style={{ textTransform: "capitalize" }}>{t}</span>
             </label>
           ))}
         </div>
@@ -418,13 +492,45 @@ export function FilterSidebar() {
       <div className={styles.filterSection}>
         <h3>Color</h3>
         <div className={styles.checkboxList}>
-          {["White", "Black", "Silver", "Red", "Blue"].map(color => (
+          {colors.map(color => (
             <label key={color} className={styles.checkboxItem}>
-              <input type="checkbox" /> {color}
+              <input
+                type="checkbox"
+                checked={filters?.selectedColors.includes(color) ?? false}
+                onChange={() => filters?.onColorToggle(color)}
+              />
+              {color}
             </label>
           ))}
         </div>
       </div>
+
+      {(filters?.selectedFuelTypes.length || filters?.selectedTransmissions.length || filters?.selectedColors.length || filters?.minPrice || filters?.maxPrice) ? (
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            background: "#fff",
+            color: "#64748b",
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: "pointer",
+            marginTop: 8,
+          }}
+          onClick={() => {
+            filters?.selectedFuelTypes.forEach(f => filters.onFuelTypeToggle(f));
+            filters?.selectedTransmissions.forEach(t => filters.onTransmissionToggle(t));
+            filters?.selectedColors.forEach(c => filters.onColorToggle(c));
+            filters?.onMinPriceChange("");
+            filters?.onMaxPriceChange("");
+          }}
+        >
+          Clear All Filters
+        </button>
+      ) : null}
     </aside>
   );
 }
@@ -595,7 +701,7 @@ export function BottomNavigation({ profile }: { profile?: UserProfile | null }) 
     { href: "/browse", label: "Browse", icon: "car" as IconName, active: pathname.startsWith("/browse") },
     { href: "/become-a-host", label: "Host", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") },
     { href: "/about", label: "About", icon: "support" as IconName, active: pathname.startsWith("/about") },
-    { href: "/contact", label: "Contact", icon: "message" as IconName, active: pathname.startsWith("/contact") },
+    { href: profile ? "/profile" : "/login", label: profile ? "Profile" : "Login", icon: "user" as IconName, active: pathname.startsWith("/profile") || pathname.startsWith("/login") },
   ];
 
   return (
@@ -626,21 +732,6 @@ export function SectionHeader({ title, onViewAll }: { title: string; onViewAll?:
   );
 }
 
-export function BrandScroller({ items }: { items: BrandItem[] }) {
-  return (
-    <div className={styles.horizontalScroller} aria-label="Car brands">
-      {items.map((brand) => (
-        <article key={brand.id} className={styles.brandChip}>
-          <span className={styles.brandBadge} style={{ background: brand.accent }}>
-            {brand.mark}
-          </span>
-          <span className={styles.brandName}>{brand.name}</span>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function CarArt({ accent }: { accent: string }) {
   return (
     <svg width="210" height="98" viewBox="0 0 210 98" fill="none" aria-hidden="true">
@@ -667,64 +758,82 @@ function CarArt({ accent }: { accent: string }) {
 }
 
 export function CarCard({ car }: { car: CarListing }) {
-  // Normalize car name to match format like: teslamodels.png (lowercase, alphanumeric characters only)
-  const filename = car.name.toLowerCase().replace(/[^a-z0-9]/g, "") + ".png";
-  const imageSrc = `/${filename}`;
+  const displayName = `${car.brand} ${car.model}`;
+  const primaryImage = car.images?.find(img => img.is_primary) || car.images?.[0];
+  const rating = car.avg_rating ?? 0;
+
+  // Generate a subtle accent color from the brand name
+  const accentColors: Record<string, string> = {
+    Toyota: "#e8f0fe",
+    Hyundai: "#e3f2fd",
+    Suzuki: "#fce4ec",
+    BMW: "#e8eaf6",
+    Tesla: "#e0f2f1",
+    Mercedes: "#f3e5f5",
+    Honda: "#fff3e0",
+  };
+  const accent = accentColors[car.brand] || "#f1f5f9";
 
   return (
-    <article className={styles.carCard}>
-      <div className={styles.carImagePanel} style={{ background: car.accent, minHeight: 140, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-        <button type="button" className={styles.favoriteButton} aria-label={`Favorite ${car.name}`}>
-          <Icon name="heart" size={18} filled={car.favorite} />
-        </button>
-        <img 
-          src={imageSrc} 
-          alt={car.name} 
-          style={{ maxWidth: "90%", maxHeight: "85%", objectFit: "contain" }}
-          onError={(e) => {
-            // Fallback gracefully to the pure CSS art if physical file doesn't exist yet
-            e.currentTarget.style.display = "none";
-            const sibling = e.currentTarget.nextElementSibling as HTMLElement;
-            if (sibling) sibling.style.display = "block";
-          }}
-        />
-        <div style={{ display: "none" }}>
-          <CarArt accent="rgba(255,255,255,0.72)" />
+    <Link href={`/browse/${car.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+      <article className={styles.carCard}>
+        <div className={styles.carImagePanel} style={{ background: accent, position: "relative" }}>
+          {primaryImage ? (
+            <img
+              src={primaryImage.image_url}
+              alt={displayName}
+              className={styles.carImageCover}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+                const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                if (sibling) sibling.style.display = "flex";
+              }}
+            />
+          ) : null}
+          <div className={styles.carImageFallback} style={{ display: primaryImage ? "none" : "flex" }}>
+            <CarArt accent="rgba(255,255,255,0.72)" />
+          </div>
+          <span className={styles.categoryBadge}>{car.category}</span>
         </div>
-      </div>
-      <h3 className={styles.carName}>{car.name}</h3>
-      <div className={styles.carMetaRow}>
-        <span className={styles.carMetaItem}>
-          <Icon name="star" size={15} filled />
-          {car.rating.toFixed(1)}
-        </span>
-        <span className={styles.carMetaItem}>
-          <Icon name="seat" size={15} />
-          {car.seats} Seats
-        </span>
-      </div>
-      <div className={styles.carMetaRow}>
-        <span className={styles.carMetaItem}>
-          <Icon name="location" size={15} />
-          {car.location}
-        </span>
-      </div>
-      <div className={styles.carFooter}>
-        <span className={styles.price}>
-          ${car.pricePerDay}
-          <small>/day</small>
-        </span>
-        <button type="button" className={styles.bookButton}>
-          Rent
-        </button>
-      </div>
-    </article>
+        <h3 className={styles.carName}>{displayName}</h3>
+        <div className={styles.carMetaRow}>
+          <span className={styles.carMetaItem}>
+            <Icon name="star" size={15} filled />
+            {rating > 0 ? rating.toFixed(1) : "New"}
+          </span>
+          <span className={styles.carMetaItem}>
+            <Icon name="seat" size={15} />
+            {car.seats} Seats
+          </span>
+        </div>
+        <div className={styles.carMetaRow}>
+          <span className={styles.carMetaItem}>
+            <Icon name="location" size={15} />
+            {car.location}
+          </span>
+          {car.fuel_type ? (
+            <span className={styles.carMetaItem} style={{ textTransform: "capitalize" }}>
+              {car.fuel_type}
+            </span>
+          ) : null}
+        </div>
+        <div className={styles.carFooter}>
+          <span className={styles.price}>
+            Rs. {Number(car.price_per_day).toLocaleString()}
+            <small>/day</small>
+          </span>
+          <span className={styles.bookButton}>
+            View
+          </span>
+        </div>
+      </article>
+    </Link>
   );
 }
 
 export function CarsScroller({ cars }: { cars: CarListing[] }) {
   return (
-    <div className={styles.horizontalScroller} aria-label="Car listings">
+    <div className={styles.carsGrid} aria-label="Car listings">
       {cars.map((car) => (
         <CarCard key={car.id} car={car} />
       ))}
