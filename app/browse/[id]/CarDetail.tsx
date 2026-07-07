@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   AppScreen,
@@ -15,9 +15,15 @@ interface CarDetailProps {
   reviews: Review[];
   profile: UserProfile | null;
   userId: string | null;
+  userBookings?: Array<{
+    id: number;
+    booking_status: string;
+    has_review?: boolean;
+  }>;
 }
 
-export default function CarDetailClient({ car, reviews, profile, userId }: CarDetailProps) {
+export default function CarDetailClient({ car, reviews: initialReviews, profile, userId, userBookings }: CarDetailProps) {
+  const [reviews, setReviews] = useState<Review[]>(initialReviews);
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [pickupDate, setPickupDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
@@ -26,7 +32,13 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
   const [bookingStatus, setBookingStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [bookingError, setBookingError] = useState("");
 
-  // Review form
+  // Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentTimeLeft, setPaymentTimeLeft] = useState(300); // 5 minutes
+  const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"idle" | "loading" | "error">("idle");
+
+  // Review form state
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewStatus, setReviewStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -50,6 +62,27 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
 
   const avgRating = car.avg_rating ?? 0;
   const reviewCount = car.review_count ?? reviews.length;
+
+  // --- Payment Timer Effect ---
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (showPaymentModal && paymentTimeLeft > 0) {
+      timer = setInterval(() => {
+        setPaymentTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (showPaymentModal && paymentTimeLeft === 0) {
+      // Auto cancel on timeout
+      handlePaymentCancel(true);
+    }
+    return () => clearInterval(timer);
+  }, [showPaymentModal, paymentTimeLeft]);
+
+  // Format time for display (e.g., 04:59)
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   const handleBooking = async () => {
     if (!userId) {
@@ -89,7 +122,11 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
         setBookingError(data.error || "Failed to create booking");
         setBookingStatus("error");
       } else {
-        setBookingStatus("success");
+        // Success. We have a PAYMENT_PENDING hold. Show the payment modal.
+        setCurrentBookingId(data.booking.id);
+        setBookingStatus("idle");
+        setPaymentTimeLeft(300); // reset to 5 mins
+        setShowPaymentModal(true);
       }
     } catch {
       setBookingError("Network error. Please try again.");
@@ -97,7 +134,55 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
     }
   };
 
+  const handlePaymentConfirm = async () => {
+    if (!currentBookingId) return;
+    
+    setPaymentStatus("loading");
+    setBookingError("");
+
+    try {
+      const res = await fetch(`/api/bookings/${currentBookingId}/pay`, {
+        method: "POST"
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setBookingError(data.error || "Payment failed");
+        setPaymentStatus("error");
+      } else {
+        setShowPaymentModal(false);
+        setBookingStatus("success");
+      }
+    } catch {
+      setBookingError("Network error during payment.");
+      setPaymentStatus("error");
+    }
+  };
+
+  const handlePaymentCancel = async (isTimeout = false) => {
+    if (!currentBookingId) return;
+    
+    try {
+      await fetch(`/api/bookings/${currentBookingId}/cancel`, {
+        method: "POST"
+      });
+    } catch (e) {
+      console.error("Failed to cancel booking:", e);
+    } finally {
+      setShowPaymentModal(false);
+      setBookingStatus("error");
+      setBookingError(isTimeout ? "Reservation expired. Please try booking again." : "Payment cancelled.");
+    }
+  };
+
+  // --- Review Logic ---
+  const completedBookings = userBookings?.filter(b => String(b.booking_status).toUpperCase() === "COMPLETED") || [];
+  const unreviewedBooking = completedBookings.find(b => !b.has_review);
+  const activeBookings = userBookings?.filter(b => ["PENDING", "PAYMENT_PENDING", "CONFIRMED", "OWNER_ACCEPTED", "READY_FOR_PICKUP", "ACTIVE", "RETURN_PENDING"].includes(String(b.booking_status).toUpperCase())) || [];
+
   const handleReviewSubmit = async () => {
+    if (!unreviewedBooking) return;
+    
     setReviewStatus("loading");
     setReviewError("");
 
@@ -106,7 +191,7 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bookingId: 0, // This will need a real booking ID in production
+          bookingId: unreviewedBooking.id,
           rating: reviewRating,
           comment: reviewComment,
         }),
@@ -118,6 +203,12 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
         setReviewStatus("error");
       } else {
         setReviewStatus("success");
+        // Refresh reviews list
+        const fetchRes = await fetch(`/api/reviews?carId=${car.id}`);
+        if (fetchRes.ok) {
+          const fetchedData = await fetchRes.json();
+          setReviews(fetchedData.reviews);
+        }
       }
     } catch {
       setReviewError("Network error. Please try again.");
@@ -279,42 +370,63 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
                 </div>
               )}
 
-              {/* Write a review form (shown to logged-in users) */}
+              {/* Review Logic Implementation */}
               {userId ? (
                 <div className={styles.reviewForm}>
-                  <h3 className={styles.reviewFormTitle}>Write a Review</h3>
-                  <div className={styles.starSelector}>
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className={styles.starButton}
-                        onClick={() => setReviewRating(i + 1)}
-                        aria-label={`Rate ${i + 1} stars`}
-                      >
-                        <Icon name="star" size={24} filled={i < reviewRating} />
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    className={styles.reviewTextarea}
-                    placeholder="Share your experience with this car..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    rows={3}
-                  />
-                  {reviewError ? <p className={styles.errorText}>{reviewError}</p> : null}
                   {reviewStatus === "success" ? (
-                    <p className={styles.successText}>Review submitted successfully!</p>
+                    <div className={styles.bookingSuccess}>
+                      <Icon name="star" size={24} filled />
+                      <p>Review submitted successfully!</p>
+                      <span>Thank you for sharing your experience.</span>
+                    </div>
+                  ) : unreviewedBooking ? (
+                    <>
+                      <h3 className={styles.reviewFormTitle}>Write a Review</h3>
+                      <div className={styles.starSelector}>
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className={styles.starButton}
+                            onClick={() => setReviewRating(i + 1)}
+                            aria-label={`Rate ${i + 1} stars`}
+                          >
+                            <Icon name="star" size={24} filled={i < reviewRating} />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        className={styles.reviewTextarea}
+                        placeholder="Share your experience with this car..."
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        rows={3}
+                      />
+                      {reviewError ? <p className={styles.errorText}>{reviewError}</p> : null}
+                      <button
+                        type="button"
+                        className={styles.submitButton}
+                        onClick={handleReviewSubmit}
+                        disabled={reviewStatus === "loading"}
+                      >
+                        {reviewStatus === "loading" ? "Submitting..." : "Submit Review"}
+                      </button>
+                    </>
+                  ) : completedBookings.length > 0 ? (
+                    <div className={styles.infoMessage}>
+                      <Icon name="star" size={20} filled />
+                      <p>You've already reviewed all your completed trips for this car. Thank you!</p>
+                    </div>
+                  ) : activeBookings.length > 0 ? (
+                    <div className={styles.infoMessage}>
+                      <Icon name="clock" size={20} />
+                      <p>You can leave a review after your trip is completed.</p>
+                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      className={styles.submitButton}
-                      onClick={handleReviewSubmit}
-                      disabled={reviewStatus === "loading"}
-                    >
-                      {reviewStatus === "loading" ? "Submitting..." : "Submit Review"}
-                    </button>
+                    <div className={styles.infoMessage}>
+                      <Icon name="car" size={20} />
+                      <p>Book and complete a trip with this car to leave a review.</p>
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -384,20 +496,20 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
                 </div>
               ) : null}
 
-              {bookingError ? <p className={styles.errorText}>{bookingError}</p> : null}
+              {bookingError && !showPaymentModal ? <p className={styles.errorText}>{bookingError}</p> : null}
 
               {bookingStatus === "success" ? (
                 <div className={styles.bookingSuccess}>
                   <Icon name="heart" size={24} filled />
-                  <p>Booking request submitted!</p>
-                  <span>The owner will confirm your booking shortly.</span>
+                  <p>Payment Confirmed!</p>
+                  <span>Your payment was successful. The owner will now accept or reject the booking request.</span>
                 </div>
               ) : (
                 <button
                   type="button"
                   className={styles.bookButton}
                   onClick={handleBooking}
-                  disabled={bookingStatus === "loading" || car.status !== "available"}
+                  disabled={bookingStatus === "loading" || car.status !== "available" || showPaymentModal}
                 >
                   {bookingStatus === "loading" ? "Processing..." : car.status !== "available" ? "Not Available" : "Book Now"}
                 </button>
@@ -412,6 +524,53 @@ export default function CarDetailClient({ car, reviews, profile, userId }: CarDe
           </aside>
         </div>
       </div>
+
+      {/* ─── Payment Modal ─── */}
+      {showPaymentModal && (
+        <div className={styles.modalBackdrop}>
+          <div className={styles.paymentModal}>
+            <div className={styles.paymentHeader}>
+              <h2 className={styles.paymentTitle}>Complete Your Booking</h2>
+              <div className={styles.paymentTimer}>
+                <Icon name="clock" size={18} />
+                <span className={paymentTimeLeft < 60 ? styles.timerUrgent : ""}>
+                  {formatTime(paymentTimeLeft)}
+                </span>
+              </div>
+            </div>
+            
+            <p className={styles.paymentDesc}>
+              We've temporarily reserved this car for you. Please confirm your payment to secure the booking.
+            </p>
+
+            <div className={styles.paymentSummary}>
+              <div className={styles.paymentRow}>
+                <span>{car.brand} {car.model}</span>
+                <span>Rs. {totalAmount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className={styles.paymentActions}>
+              <button 
+                type="button" 
+                className={styles.ghostButton} 
+                onClick={() => handlePaymentCancel()}
+                disabled={paymentStatus === "loading"}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className={styles.payButton} 
+                onClick={handlePaymentConfirm}
+                disabled={paymentStatus === "loading"}
+              >
+                {paymentStatus === "loading" ? "Processing..." : "Confirm Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppScreen>
   );
 }

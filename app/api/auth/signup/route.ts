@@ -8,6 +8,7 @@ type SignupUserRow = {
   id: string;
   full_name: string;
   email: string;
+  phone: string;
   role: string;
   address: string | null;
   created_at: string;
@@ -41,12 +42,13 @@ export async function POST(request: Request) {
 
 
     const newUser = await query<SignupUserRow>(
-      `INSERT INTO users (full_name, email, password_hash, address, role, is_verified)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, full_name, email, role, address, created_at`,
+      `INSERT INTO users (full_name, email, phone, password_hash, address, role, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, full_name, email, phone, role, address, created_at`,
       [
         name.trim(),
         emailClean,
+        null,
         passwordHash,
         country?.trim() || null,
         'user',

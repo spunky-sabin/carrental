@@ -3,7 +3,6 @@ import { query } from '@/lib/db';
 import { signJWT } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 
 type LoginUserRow = {
   id: string;
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
     const emailClean = email.toLowerCase().trim();
 
     const res = await query<LoginUserRow>(
-      `SELECT id, full_name, email, password_hash, profile_image, address, date_of_birth, role, is_verified, created_at
+      `SELECT id, full_name, email, password_hash, phone, profile_image, address, date_of_birth, role, is_verified, created_at
        FROM users WHERE email = $1`,
       [emailClean]
     );

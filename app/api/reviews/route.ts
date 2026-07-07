@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "You can only review your own bookings" }, { status: 403 });
     }
 
-    if (booking.booking_status !== "completed") {
+    if (String(booking.booking_status).toUpperCase() !== "COMPLETED") {
       return NextResponse.json({ error: "You can only review completed bookings" }, { status: 400 });
     }
 
@@ -60,5 +60,37 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Review creation error:", error);
     return NextResponse.json({ error: "Failed to create review" }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const carId = searchParams.get("carId");
+
+    if (!carId) {
+      return NextResponse.json({ error: "Car ID is required" }, { status: 400 });
+    }
+
+    const result = await query(
+      `SELECT
+         r.id,
+         r.booking_id,
+         r.rating,
+         r.comment,
+         r.created_at,
+         COALESCE(u.full_name, u.email) AS renter_name
+       FROM reviews r
+       JOIN bookings b ON r.booking_id = b.id
+       JOIN users u ON b.renter_id = u.id
+       WHERE b.car_id = $1
+       ORDER BY r.created_at DESC`,
+      [Number(carId)]
+    );
+
+    return NextResponse.json({ reviews: result.rows }, { status: 200 });
+  } catch (error) {
+    console.error("Review fetch error:", error);
+    return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 });
   }
 }

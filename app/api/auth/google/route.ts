@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
 
     const googleRes = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
     );
     if (!googleRes.ok) {
       return NextResponse.json(
@@ -75,10 +75,10 @@ export async function POST(request: Request) {
       const passwordHash = await bcrypt.hash(tempPassword, salt);
 
       const newUser = await query<GoogleUserRow>(
-        `INSERT INTO users (full_name, email, password_hash, profile_image, role, is_verified)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO users (full_name, email, phone, password_hash, profile_image, role, is_verified)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, full_name, email, phone, profile_image, address, date_of_birth, role, is_verified, created_at`,
-        [fullName, emailClean, passwordHash, picture || null, 'user', true]
+        [fullName, emailClean, null, passwordHash, picture || null, 'user', true]
       );
       user = newUser.rows[0];
     }
@@ -91,6 +91,23 @@ export async function POST(request: Request) {
       role: user.role,
     });
 
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        ...user,
+        userId: user.id,
+        name: user.full_name || user.email,
+      },
+    });
+
+    response.cookies.set('session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
     const cookieStore = await cookies();
     cookieStore.set('session', token, {
       httpOnly: true,
@@ -100,8 +117,9 @@ export async function POST(request: Request) {
       path: '/',
     });
 
-    return NextResponse.json({ success: true, user });
+    return response;
   } catch (error: unknown) {
+    console.error('Google auth failed:', error);
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Something went wrong' },

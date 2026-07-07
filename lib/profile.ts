@@ -59,6 +59,7 @@ export function mapUserRowToProfile(row: UserRow): UserProfile {
     email: row.email,
     phoneNumber: row.phone || "",
     profileImage: row.profile_image || null,
+    role: row.role || "user",
     createdAt,
     updatedAt: createdAt,
   };

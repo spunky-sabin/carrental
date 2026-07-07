@@ -32,7 +32,16 @@ export async function GET() {
       return NextResponse.json({ authenticated: false, user: null });
     }
 
-    return NextResponse.json({ authenticated: true, user: res.rows[0] });
+    const user = res.rows[0];
+
+    return NextResponse.json({
+      authenticated: true,
+      user: {
+        ...user,
+        userId: user.id,
+        name: user.full_name || user.email,
+      },
+    });
   } catch {
 
     return NextResponse.json({ error: 'Failed to verify session' }, { status: 500 });

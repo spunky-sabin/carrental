@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import styles from "@/components/app/AppUI.module.css";
 import type { CarListing, UserProfile } from "@/components/app/types";
@@ -264,6 +264,47 @@ export type BrowseFilterConfig = {
   onMaxPriceChange: (v: string) => void;
 };
 
+type AuthMeUser = {
+  id?: string | number;
+  userId?: string | number;
+  full_name?: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phoneNumber?: string | null;
+  profile_image?: string | null;
+  profileImage?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  role?: string | null;
+};
+
+function mapAuthMeUserToProfile(user: AuthMeUser): UserProfile | null {
+  const id = user.id ?? user.userId;
+  const email = user.email?.trim();
+
+  if (!id || !email) {
+    return null;
+  }
+
+  const fullName = (user.full_name ?? user.name ?? email).trim() || email;
+  const [firstName = "", ...lastNameParts] = fullName.split(/\s+/).filter(Boolean);
+  const createdAt = user.created_at ?? user.createdAt ?? new Date().toISOString();
+
+  return {
+    id: String(id),
+    firstName,
+    lastName: lastNameParts.join(" "),
+    fullName,
+    email,
+    phoneNumber: user.phone ?? user.phoneNumber ?? "",
+    profileImage: user.profile_image ?? user.profileImage ?? null,
+    role: user.role ?? "user",
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
 export function AppScreen({
   children,
   withNav = true,
@@ -279,6 +320,38 @@ export function AppScreen({
 }) {
   const pathname = usePathname();
   const isBrowse = pathname === "/browse";
+  const [hydratedProfile, setHydratedProfile] = useState<UserProfile | null>(null);
+  const resolvedProfile = profile ?? hydratedProfile;
+
+  useEffect(() => {
+    if (profile) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateProfile = async () => {
+      try {
+        const response = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = (await response.json()) as { authenticated?: boolean; user?: AuthMeUser | null };
+        const nextProfile = data.authenticated && data.user ? mapAuthMeUserToProfile(data.user) : null;
+
+        if (!cancelled) {
+          setHydratedProfile(nextProfile);
+        }
+      } catch {
+        if (!cancelled) {
+          setHydratedProfile(null);
+        }
+      }
+    };
+
+    void hydrateProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   return (
     <div className={styles.screen}>
@@ -292,7 +365,7 @@ export function AppScreen({
       {/* Desktop-style shell */}
       <div className={styles.desktopShell}>
         <main className={styles.desktopMain}>
-          <DesktopTopNav profile={profile} />
+          <DesktopTopNav profile={resolvedProfile} />
           <div className={styles.glassCard}>
             {isBrowse && browseFilters ? (
               <>
@@ -323,17 +396,24 @@ export function AppScreen({
         </main>
       </div>
 
-      {withNav ? <BottomNavigation profile={profile} /> : null}
+      {withNav ? <BottomNavigation profile={resolvedProfile} /> : null}
     </div>
   );
 }
 
 export function DesktopTopNav({ profile }: { profile?: UserProfile | null }) {
   const pathname = usePathname();
+  const isOwner = profile?.role === "owner";
+  const isAdmin = profile?.role === "admin";
+  const ownerItem = isAdmin
+    ? { href: "/admin/owner-applications", label: "Owner Applications", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
+    : isOwner
+      ? { href: "/owner", label: "Owner Dashboard", icon: "briefcase" as IconName, active: pathname.startsWith("/owner") }
+      : { href: "/become-a-host", label: "Become an Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") };
   const items = [
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" || pathname === "/" },
     { href: "/browse", label: "Browse Cars", icon: "car" as IconName, active: pathname.startsWith("/browse") },
-    { href: "/become-a-host", label: "Become a Host", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") },
+    ownerItem,
     { href: "/about", label: "About", icon: "support" as IconName, active: pathname.startsWith("/about") },
     { href: "/contact", label: "Contact", icon: "message" as IconName, active: pathname.startsWith("/contact") },
   ];
@@ -696,10 +776,17 @@ export function AppHeader({
 
 export function BottomNavigation({ profile }: { profile?: UserProfile | null }) {
   const pathname = usePathname();
+  const isOwner = profile?.role === "owner";
+  const isAdmin = profile?.role === "admin";
+  const ownerItem = isAdmin
+    ? { href: "/admin/owner-applications", label: "Admin", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
+    : isOwner
+      ? { href: "/owner", label: "Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/owner") }
+      : { href: "/become-a-host", label: "Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") };
   const items = [
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" || pathname === "/" },
     { href: "/browse", label: "Browse", icon: "car" as IconName, active: pathname.startsWith("/browse") },
-    { href: "/become-a-host", label: "Host", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") },
+    ownerItem,
     { href: "/about", label: "About", icon: "support" as IconName, active: pathname.startsWith("/about") },
     { href: profile ? "/profile" : "/login", label: profile ? "Profile" : "Login", icon: "user" as IconName, active: pathname.startsWith("/profile") || pathname.startsWith("/login") },
   ];

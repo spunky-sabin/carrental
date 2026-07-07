@@ -164,3 +164,33 @@ export const getCarReviews = cache(async (carId: number): Promise<Review[]> => {
   );
   return result.rows;
 });
+
+/**
+ * Fetch all bookings for a user for a specific car.
+ */
+export const getUserBookingsForCar = cache(async (userId: string | number, carId: number) => {
+  const result = await query(
+    `SELECT b.*,
+      (SELECT COUNT(*) FROM reviews r WHERE r.booking_id = b.id) > 0 as has_review
+     FROM bookings b
+     WHERE b.renter_id = $1 AND b.car_id = $2
+     ORDER BY b.created_at DESC`,
+    [userId, carId]
+  );
+  return result.rows;
+});
+
+/**
+ * Fetch all completed bookings for a user.
+ */
+export const getUserCompletedBookings = cache(async (userId: string | number) => {
+  const result = await query(
+    `SELECT b.*,
+      (SELECT COUNT(*) FROM reviews r WHERE r.booking_id = b.id) > 0 as has_review
+     FROM bookings b
+     WHERE b.renter_id = $1 AND UPPER(b.booking_status) = 'COMPLETED'
+     ORDER BY b.created_at DESC`,
+    [userId]
+  );
+  return result.rows;
+});

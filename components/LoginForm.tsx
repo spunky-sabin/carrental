@@ -1,7 +1,6 @@
 'use client';
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 
@@ -52,7 +51,6 @@ const actionButtonBase: CSSProperties = {
 const iconStroke = "#6b7280";
 
 export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [email, setEmail] = useState("");
@@ -73,7 +71,7 @@ export default function LoginForm({ maxWidth = 560 }: LoginFormProps) {
         });
         const data = await res.json();
         if (data.success) {
-          router.push("/home");
+          window.location.href = "/home";
         } else {
           setError(data.error || "Google sign in failed.");
         }

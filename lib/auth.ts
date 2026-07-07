@@ -24,8 +24,9 @@ export async function verifyJWT(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     // Accept numeric userId (DB integer) or string, normalize to string
-    const rawUserId = (payload as any).userId;
-    const rawEmail = (payload as any).email;
+    const payloadRecord = payload as Record<string, unknown>;
+    const rawUserId = payloadRecord.userId;
+    const rawEmail = payloadRecord.email;
     if ((typeof rawUserId !== 'string' && typeof rawUserId !== 'number') || typeof rawEmail !== 'string') {
       return null;
     }

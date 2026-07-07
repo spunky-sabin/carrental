@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { ensureOwnerSchema } from "@/lib/owner";
 
 export async function POST(request: Request) {
   try {
+    await ensureOwnerSchema();
     const session = await getSessionUser();
     if (!session?.userId) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -24,9 +26,9 @@ export async function POST(request: Request) {
 
     const totalDays = Math.ceil((returnD.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Get car price
-    const carResult = await query<{ price_per_day: string; status: string }>(
-      "SELECT price_per_day, status FROM cars WHERE id = $1 AND is_active = true",
+    // Get car price and status
+    const carResult = await query<{ price_per_day: string; status: string; owner_id: number; minimum_rental_days: number | null; maximum_rental_days: number | null }>(
+      "SELECT price_per_day, status, owner_id, minimum_rental_days, maximum_rental_days FROM cars WHERE id = $1 AND is_active = true FOR UPDATE",
       [carId]
     );
 
@@ -38,14 +40,53 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Car is not available for booking" }, { status: 400 });
     }
 
+    if (String(carResult.rows[0].owner_id) === String(session.userId)) {
+      return NextResponse.json({ error: "Owners cannot book their own car" }, { status: 400 });
+    }
+
+    const minimumDays = carResult.rows[0].minimum_rental_days || 1;
+    const maximumDays = carResult.rows[0].maximum_rental_days;
+
+    if (totalDays < minimumDays) {
+      return NextResponse.json({ error: `Minimum rental duration is ${minimumDays} day(s)` }, { status: 400 });
+    }
+
+    if (maximumDays && totalDays > maximumDays) {
+      return NextResponse.json({ error: `Maximum rental duration is ${maximumDays} day(s)` }, { status: 400 });
+    }
+
+    const blockedResult = await query<{ blocked: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM car_availability
+         WHERE car_id = $1
+           AND daterange(start_date, end_date, '[]') && daterange($2::date, $3::date, '[]')
+       ) AS blocked`,
+      [carId, pickupDate, returnDate]
+    );
+
+    if (blockedResult.rows[0]?.blocked) {
+      return NextResponse.json({ error: "Car is unavailable for the selected dates" }, { status: 400 });
+    }
+
     const pricePerDay = Number(carResult.rows[0].price_per_day);
     const totalAmount = pricePerDay * totalDays;
 
+    // Create the booking with a short payment hold. After payment, owners receive a CONFIRMED request.
     const result = await query(
-      `INSERT INTO bookings (car_id, renter_id, pickup_date, return_date, pickup_location, dropoff_location, total_days, total_amount, booking_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+      `INSERT INTO bookings (
+         car_id, renter_id, pickup_date, return_date, pickup_location, dropoff_location,
+         total_days, total_amount, booking_status, reservation_expires_at, expires_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PAYMENT_PENDING', NOW() + INTERVAL '5 minutes', NOW() + INTERVAL '5 minutes')
        RETURNING *`,
       [carId, session.userId, pickupDate, returnDate, pickupLocation || null, dropoffLocation || null, totalDays, totalAmount]
+    );
+
+    // Mark car as booked
+    await query(
+      "UPDATE cars SET status = 'booked' WHERE id = $1",
+      [carId]
     );
 
     return NextResponse.json({ booking: result.rows[0] }, { status: 201 });

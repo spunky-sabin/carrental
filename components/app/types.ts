@@ -14,6 +14,7 @@ export type UserProfile = {
   email: string;
   phoneNumber: string;
   profileImage: string | null;
+  role?: "user" | "owner" | "admin" | string;
   createdAt: string;
   updatedAt: string;
 };
@@ -87,6 +88,22 @@ export type Booking = {
   dropoff_location: string | null;
   total_days: number;
   total_amount: number;
-  booking_status: "pending" | "confirmed" | "completed" | "cancelled";
+  booking_status:
+    | "PAYMENT_PENDING"
+    | "CONFIRMED"
+    | "OWNER_ACCEPTED"
+    | "READY_FOR_PICKUP"
+    | "ACTIVE"
+    | "RETURN_PENDING"
+    | "COMPLETED"
+    | "CANCELLED"
+    | "REJECTED"
+    | "EXPIRED"
+    | "payment_pending"
+    | "pending"
+    | "confirmed"
+    | "completed"
+    | "cancelled";
+  reservation_expires_at?: string;
   created_at: string;
 };
