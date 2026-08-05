@@ -25,19 +25,29 @@ export async function uploadToStorage(
   file: File | Blob,
   contentType?: string
 ): Promise<string> {
-  const { data, error } = await supabaseAdmin.storage
-    .from(bucket)
-    .upload(path, file, {
-      contentType: contentType ?? (file instanceof File ? file.type : "application/octet-stream"),
-      upsert: false,
-    });
+  const mimeType = contentType ?? (file instanceof File ? file.type : "application/octet-stream");
 
-  if (error) {
-    throw new Error(`Upload failed: ${error.message}`);
+  try {
+    const { data, error } = await supabaseAdmin.storage
+      .from(bucket)
+      .upload(path, file, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (!error && data?.path) {
+      const { data: publicData } = supabaseAdmin.storage.from(bucket).getPublicUrl(data.path);
+      if (publicData?.publicUrl) {
+        return publicData.publicUrl;
+      }
+    }
+  } catch (_err) {
+    // Fallback to Base64 Data URL if storage is unreachable
   }
 
-  const { data: publicData } = supabaseAdmin.storage.from(bucket).getPublicUrl(data.path);
-  return publicData.publicUrl;
+  const arrayBuffer = await file.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return `data:${mimeType};base64,${base64}`;
 }
 
 /**

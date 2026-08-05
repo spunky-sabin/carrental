@@ -107,7 +107,7 @@ export async function POST(
   }
 
   if (action === "receive_vehicle" || action === "complete") {
-    if (!["ACTIVE", "RETURN_PENDING"].includes(status)) {
+    if (!["ACTIVE", "RETURN_PENDING", "RETURN_REQUESTED"].includes(status)) {
       return NextResponse.json({ error: "Only active or return-pending bookings can be completed." }, { status: 400 });
     }
 
@@ -130,6 +130,87 @@ export async function POST(
     await query("UPDATE cars SET status = 'available' WHERE id = $1 AND status <> 'maintenance'", [booking.car_id]);
     await addNotification(booking.renter_id, "Vehicle returned", `${booking.brand} ${booking.model} rental has been completed.`, "Vehicle Returned");
     return NextResponse.json({ message: "Vehicle received and booking completed." });
+  }
+
+  if (action === "acknowledge_return") {
+    if (status !== "RETURN_REQUESTED") {
+      return NextResponse.json({ error: "Only return-requested bookings can be acknowledged." }, { status: 400 });
+    }
+    await query("UPDATE bookings SET booking_status = 'RETURN_PENDING' WHERE id = $1", [bookingId]);
+    await addNotification(booking.renter_id, "Return acknowledged", `The owner has acknowledged your return request for ${booking.brand} ${booking.model}. Please return the vehicle.`, "Vehicle Return Due");
+    return NextResponse.json({ message: "Return request acknowledged. Booking is now in return pending state." });
+  }
+
+  if (action === "reject_return") {
+    if (status !== "RETURN_REQUESTED") {
+      return NextResponse.json({ error: "Only return-requested bookings can have the return rejected." }, { status: 400 });
+    }
+    await query("UPDATE bookings SET booking_status = 'ACTIVE' WHERE id = $1", [bookingId]);
+    await addNotification(booking.renter_id, "Return request declined", `The owner has declined your return signal for ${booking.brand} ${booking.model}. Rental remains active.`, "Booking Accepted");
+    return NextResponse.json({ message: "Return request rejected. Booking restored to active." });
+  }
+
+  if (action === "approve_extension") {
+    const extResult = await query<{ id: number; additional_cost: string; requested_return_date: string; renter_id: number }>(
+      `SELECT be.id, be.additional_cost, be.requested_return_date, b.renter_id
+       FROM booking_extensions be
+       JOIN bookings b ON be.booking_id = b.id
+       WHERE be.booking_id = $1 AND be.status = 'PENDING'
+       ORDER BY be.created_at DESC LIMIT 1`,
+      [bookingId]
+    );
+
+    if (extResult.rows.length === 0) {
+      return NextResponse.json({ error: "No pending extension request found." }, { status: 404 });
+    }
+
+    const ext = extResult.rows[0];
+    await query(
+      "UPDATE booking_extensions SET status = 'APPROVED', approved_at = NOW() WHERE id = $1",
+      [ext.id]
+    );
+
+    await addNotification(
+      ext.renter_id,
+      "Extension approved!",
+      `Your extension request for ${booking.brand} ${booking.model} until ${ext.requested_return_date} has been approved. Please pay Rs. ${Number(ext.additional_cost).toLocaleString()} to confirm.`,
+      "Booking Extended"
+    );
+    return NextResponse.json({
+      message: "Extension approved. User will be prompted to pay.",
+      extension_id: ext.id,
+      additional_cost: ext.additional_cost,
+    });
+  }
+
+  if (action === "reject_extension") {
+    const extResult = await query<{ id: number; renter_id: number; requested_return_date: string }>(
+      `SELECT be.id, b.renter_id, be.requested_return_date
+       FROM booking_extensions be
+       JOIN bookings b ON be.booking_id = b.id
+       WHERE be.booking_id = $1 AND be.status = 'PENDING'
+       ORDER BY be.created_at DESC LIMIT 1`,
+      [bookingId]
+    );
+
+    if (extResult.rows.length === 0) {
+      return NextResponse.json({ error: "No pending extension request found." }, { status: 404 });
+    }
+
+    const ext = extResult.rows[0];
+    const reason = String(body.rejection_reason || "Extension request rejected by owner.").trim();
+    await query(
+      "UPDATE booking_extensions SET status = 'REJECTED', rejected_at = NOW(), rejection_reason = $2 WHERE id = $1",
+      [ext.id, reason]
+    );
+
+    await addNotification(
+      ext.renter_id,
+      "Extension rejected",
+      `Your extension request for ${booking.brand} ${booking.model} until ${ext.requested_return_date} was rejected. ${reason}`,
+      "Booking Cancelled"
+    );
+    return NextResponse.json({ message: "Extension request rejected." });
   }
 
   if (action === "report_damage") {

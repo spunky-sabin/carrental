@@ -8,6 +8,7 @@ export const OWNER_BOOKING_STATUSES = [
   "OWNER_ACCEPTED",
   "READY_FOR_PICKUP",
   "ACTIVE",
+  "RETURN_REQUESTED",
   "RETURN_PENDING",
   "COMPLETED",
   "CANCELLED",
@@ -62,6 +63,7 @@ type OwnerDashboardCarRow = {
   avg_rating: string | null;
   review_count: string;
   booking_count: string;
+  total_earnings: string;
   view_count: string;
   // Approval workflow
   approval_status: string | null;
@@ -80,12 +82,13 @@ type OwnerDashboardImageRow = {
   display_order: number;
 };
 
-export type OwnerDashboardCar = Omit<OwnerDashboardCarRow, "price_per_day" | "mileage" | "avg_rating" | "review_count" | "booking_count" | "view_count" | "primary_image"> & {
+export type OwnerDashboardCar = Omit<OwnerDashboardCarRow, "price_per_day" | "mileage" | "avg_rating" | "review_count" | "booking_count" | "total_earnings" | "view_count" | "primary_image"> & {
   price_per_day: number;
   mileage: number | null;
   avg_rating: number | null;
   review_count: number;
   booking_count: number;
+  total_earnings: number;
   view_count: number;
   images: OwnerDashboardImageRow[];
   features: string[];
@@ -273,12 +276,15 @@ export async function ensureOwnerSchema() {
 
 async function runOwnerSchemaUpgrade() {
   const statements = [
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pickup_confirmed_at TIMESTAMP`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS returned_at TIMESTAMP`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ALTER COLUMN expires_at TYPE TIMESTAMPTZ`,
+    `ALTER TABLE bookings ALTER COLUMN reservation_expires_at TYPE TIMESTAMPTZ`,
+    `ALTER TABLE bookings ALTER COLUMN created_at TYPE TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pickup_confirmed_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_notes TEXT`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pickup_odometer INTEGER`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS return_odometer INTEGER`,
@@ -379,6 +385,12 @@ async function runOwnerSchemaUpgrade() {
       is_read BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
+    // Extension payment tracking
+    `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'UNPAID'`,
+    `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`,
+    `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS transaction_reference VARCHAR(255)`,
+    `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP`,
+    `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS rejection_reason TEXT`,
   ];
 
 
@@ -559,7 +571,8 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
        (SELECT ci.image_url FROM car_images ci WHERE ci.car_id = c.id AND ci.is_primary = true LIMIT 1) AS primary_image,
        (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r JOIN bookings b ON r.booking_id = b.id WHERE b.car_id = c.id) AS avg_rating,
        (SELECT COUNT(*) FROM reviews r JOIN bookings b ON r.booking_id = b.id WHERE b.car_id = c.id) AS review_count,
-       (SELECT COUNT(*) FROM bookings b WHERE b.car_id = c.id) AS booking_count,
+       (SELECT COUNT(*) FROM bookings b WHERE b.car_id = c.id AND UPPER(b.booking_status) NOT IN ('EXPIRED', 'CANCELLED', 'REJECTED', 'PAYMENT_PENDING')) AS booking_count,
+       (SELECT COALESCE(SUM(b.total_amount), 0) FROM bookings b WHERE b.car_id = c.id AND UPPER(b.booking_status) NOT IN ('EXPIRED', 'CANCELLED', 'REJECTED', 'PAYMENT_PENDING')) AS total_earnings,
        (SELECT COUNT(*) FROM car_views cv WHERE cv.car_id = c.id) AS view_count
      FROM cars c
      WHERE c.owner_id = $1
@@ -595,6 +608,7 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
     avg_rating: car.avg_rating ? Number(Number(car.avg_rating).toFixed(1)) : null,
     review_count: Number(car.review_count || 0),
     booking_count: Number(car.booking_count || 0),
+    total_earnings: Number(car.total_earnings || 0),
     view_count: Number(car.view_count || 0),
     features: Array.isArray(car.features) ? car.features : [],
     images: imagesByCar.get(car.id) || (car.primary_image ? [{

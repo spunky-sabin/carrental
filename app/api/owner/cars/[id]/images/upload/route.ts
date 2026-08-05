@@ -46,19 +46,27 @@ export async function POST(request: Request, { params }: Params) {
   const arrayBuffer = await file.arrayBuffer();
   const blob = new Blob([arrayBuffer], { type: file.type });
 
-  const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-    .from(BUCKETS.carImages)
-    .upload(fileName, blob, {
-      contentType: file.type,
-      upsert: false,
-    });
+  let imageUrl: string;
 
-  if (uploadError) {
-    return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 });
+  try {
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from(BUCKETS.carImages)
+      .upload(fileName, blob, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (!uploadError && uploadData?.path) {
+      const { data: publicData } = supabaseAdmin.storage.from(BUCKETS.carImages).getPublicUrl(uploadData.path);
+      imageUrl = publicData.publicUrl;
+    } else {
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      imageUrl = `data:${file.type};base64,${base64}`;
+    }
+  } catch (_err) {
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    imageUrl = `data:${file.type};base64,${base64}`;
   }
-
-  const { data: publicData } = supabaseAdmin.storage.from(BUCKETS.carImages).getPublicUrl(uploadData.path);
-  const imageUrl = publicData.publicUrl;
 
   // Get next display order
   const orderResult = await query<{ next_order: number }>(

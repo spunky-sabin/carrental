@@ -37,6 +37,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
   const [paymentTimeLeft, setPaymentTimeLeft] = useState(300); // 5 minutes
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [paymentMethod, setPaymentMethod] = useState<"esewa" | "paybridge">("esewa");
 
   // Review form state
   const [reviewRating, setReviewRating] = useState(5);
@@ -76,6 +77,18 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
     }
     return () => clearInterval(timer);
   }, [showPaymentModal, paymentTimeLeft]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        setBookingStatus("success");
+      } else if (params.get("cancelled") === "true") {
+        setBookingStatus("error");
+        setBookingError("Payment was cancelled. Reservation released and car is available.");
+      }
+    }
+  }, []);
 
   // Format time for display (e.g., 04:59)
   const formatTime = (seconds: number) => {
@@ -137,23 +150,67 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
   const handlePaymentConfirm = async () => {
     if (!currentBookingId) return;
     
+    console.log("👉 [1/4] Initiating payment for Booking ID:", currentBookingId, "Method:", paymentMethod);
     setPaymentStatus("loading");
     setBookingError("");
 
     try {
       const res = await fetch(`/api/bookings/${currentBookingId}/pay`, {
-        method: "POST"
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentMethod }),
       });
 
       const data = await res.json();
+      console.log("👉 [2/4] Payment API response received:", data);
+
       if (!res.ok) {
-        setBookingError(data.error || "Payment failed");
+        const errorMsg = data.error || "Payment failed";
+        console.error("❌ Payment API returned error:", errorMsg);
+        setBookingError(errorMsg);
         setPaymentStatus("error");
+        
+        // If booking is expired or no longer pending, close modal after showing error
+        const isExpired = errorMsg.toLowerCase().includes("expired") || errorMsg.toLowerCase().includes("cancelled") || errorMsg.toLowerCase().includes("not pending");
+        if (isExpired) {
+          setTimeout(() => {
+            setShowPaymentModal(false);
+            setBookingStatus("error");
+          }, 1500);
+        }
+      } else if (data.provider === "esewa" && data.esewa) {
+        console.log("👉 [3/4] Constructing eSewa v2 HTML Form POST request...");
+        console.log("eSewa Action URL:", data.esewa.action_url);
+        console.log("eSewa Form Data:", data.esewa);
+
+        // eSewa v2 requires posting a HTML form to rc-epay.esewa.com.np
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = data.esewa.action_url;
+
+        Object.entries(data.esewa).forEach(([key, value]) => {
+          if (key !== "action_url" && value !== undefined && value !== null) {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = key;
+            input.value = String(value);
+            form.appendChild(input);
+          }
+        });
+
+        console.log("👉 [4/4] Submitting eSewa form to gateway now...");
+        document.body.appendChild(form);
+        form.submit();
+      } else if (data.checkout_url || data.checkoutUrl) {
+        console.log("👉 [3/4] Redirecting to PayBridge Checkout URL:", data.checkout_url || data.checkoutUrl);
+        window.location.href = data.checkout_url || data.checkoutUrl;
       } else {
+        console.log("👉 Payment confirmed internally without external gateway.");
         setShowPaymentModal(false);
         setBookingStatus("success");
       }
-    } catch {
+    } catch (err) {
+      console.error("❌ Network or script error during payment execution:", err);
       setBookingError("Network error during payment.");
       setPaymentStatus("error");
     }
@@ -415,7 +472,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                   ) : completedBookings.length > 0 ? (
                     <div className={styles.infoMessage}>
                       <Icon name="star" size={20} filled />
-                      <p>You've already reviewed all your completed trips for this car. Thank you!</p>
+                      <p>You have already reviewed all your completed trips for this car. Thank you!</p>
                     </div>
                   ) : activeBookings.length > 0 ? (
                     <div className={styles.infoMessage}>
@@ -540,7 +597,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
             </div>
             
             <p className={styles.paymentDesc}>
-              We've temporarily reserved this car for you. Please confirm your payment to secure the booking.
+              We have temporarily reserved this car for you. Please confirm your payment to secure the booking.
             </p>
 
             <div className={styles.paymentSummary}>
@@ -549,6 +606,40 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                 <span>Rs. {totalAmount.toLocaleString()}</span>
               </div>
             </div>
+
+            <div className={styles.paymentOptionsSection}>
+              <div className={styles.paymentOptionLabel}>Select Payment Method</div>
+              
+              <button
+                type="button"
+                className={`${styles.paymentOptionCard} ${paymentMethod === "esewa" ? styles.paymentOptionActive : ""}`}
+                onClick={() => setPaymentMethod("esewa")}
+              >
+                <div className={`${styles.paymentOptionBadge} ${styles.esewaBadge}`}>eSewa</div>
+                <div className={styles.paymentOptionMeta}>
+                  <span className={styles.paymentOptionTitle}>eSewa</span>
+                  <span className={styles.paymentOptionSubtitle}>eSewa ePay v2 digital wallet</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.paymentOptionCard} ${paymentMethod === "paybridge" ? styles.paymentOptionActive : ""}`}
+                onClick={() => setPaymentMethod("paybridge")}
+              >
+                <div className={`${styles.paymentOptionBadge} ${styles.paybridgeBadge}`}>PB</div>
+                <div className={styles.paymentOptionMeta}>
+                  <span className={styles.paymentOptionTitle}>PayBridge</span>
+                  <span className={styles.paymentOptionSubtitle}>PayBridge NP wallet & card checkout</span>
+                </div>
+              </button>
+            </div>
+
+            {bookingError ? (
+              <p className={styles.errorText} style={{ marginBottom: "1rem", textAlign: "center" }}>
+                {bookingError}
+              </p>
+            ) : null}
 
             <div className={styles.paymentActions}>
               <button 
@@ -565,7 +656,11 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                 onClick={handlePaymentConfirm}
                 disabled={paymentStatus === "loading"}
               >
-                {paymentStatus === "loading" ? "Processing..." : "Confirm Payment"}
+                {paymentStatus === "loading" 
+                  ? "Processing..." 
+                  : paymentMethod === "esewa" 
+                    ? "Pay with eSewa" 
+                    : "Pay with PayBridge"}
               </button>
             </div>
           </div>

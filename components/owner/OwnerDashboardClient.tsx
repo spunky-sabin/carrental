@@ -22,12 +22,7 @@ type OwnerSection =
   | "booking-detail"
   | "earnings"
   | "reviews"
-  | "notifications"
-  | "calendar"
-  | "availability"
-  | "documents"
-  | "analytics"
-  | "profile";
+  | "notifications";
 
 type FuelLevel = "Empty" | "1/4" | "1/2" | "3/4" | "Full";
 
@@ -64,16 +59,11 @@ type CarFormState = {
 
 const ownerNav: Array<{ section: OwnerSection; href: string; label: string; icon: Parameters<typeof Icon>[0]["name"] }> = [
   { section: "dashboard", href: "/owner", label: "Dashboard", icon: "home" },
-  { section: "cars", href: "/owner/cars", label: "My Cars", icon: "car" },
+  { section: "cars", href: "/owner/cars", label: "Manage Cars", icon: "car" },
   { section: "bookings", href: "/owner/bookings", label: "Bookings", icon: "clock" },
   { section: "earnings", href: "/owner/earnings", label: "Earnings", icon: "briefcase" },
-  { section: "reviews", href: "/owner/reviews", label: "Reviews", icon: "star" },
   { section: "notifications", href: "/owner/notifications", label: "Notifications", icon: "bell" },
-  { section: "calendar", href: "/owner/calendar", label: "Calendar", icon: "clock" },
-  { section: "availability", href: "/owner/availability", label: "Availability", icon: "settings" },
-  { section: "documents", href: "/owner/documents", label: "Documents", icon: "privacy" },
-  { section: "analytics", href: "/owner/analytics", label: "Analytics", icon: "filter" },
-  { section: "profile", href: "/owner/profile", label: "Profile", icon: "user" },
+  { section: "reviews", href: "/owner/reviews", label: "Reviews", icon: "star" },
 ];
 
 const emptyCarForm: CarFormState = {
@@ -172,6 +162,10 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
   const [imageUrl, setImageUrl] = useState("");
   const [reviewFilter, setReviewFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const CARS_PER_PAGE = 8;
 
   const api = async (url: string, init: RequestInit) => {
     setBusy(true);
@@ -210,6 +204,7 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
     ? data.reviews
     : data.reviews.filter((review) => String(review.rating) === reviewFilter);
   const selectedImageCar = data.cars.find((car) => car.id === imageCarId) || data.cars[0] || null;
+  const isCarsSection = section === "cars";
 
   const content = (() => {
     switch (section) {
@@ -225,16 +220,6 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
         return renderReviews();
       case "notifications":
         return renderNotifications();
-      case "calendar":
-        return renderCalendar();
-      case "availability":
-        return renderAvailability();
-      case "documents":
-        return renderDocuments();
-      case "analytics":
-        return renderAnalytics();
-      case "profile":
-        return renderProfile();
       default:
         return renderDashboard();
     }
@@ -255,12 +240,6 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
       earnings: "Track revenue across today, week, month, year, lifetime, and recent payment history.",
       reviews: "Read customer feedback and filter ratings across your fleet.",
       notifications: "Review owner alerts for bookings, returns, payments, reviews, and documents.",
-      calendar: "Inspect booked, blocked, and available days in one calendar.",
-      availability: "Block out days where vehicles are unavailable.",
-
-      documents: "Manage insurance, registration, bluebook, tax, and pollution certificate expirations.",
-      analytics: "Measure views, bookings, conversion, occupancy, revenue, cancellations, and popular vehicles.",
-      profile: "Manage owner business, contact, payout, profile, and review information.",
     };
 
     return descriptions[section];
@@ -342,8 +321,8 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
 
       setCarForm(emptyCarForm);
       setSelectedFiles([]);
+      setIsModalOpen(false);
       router.refresh();
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError("Network error. Please try again.");
     } finally {
@@ -427,174 +406,303 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
   }
 
   function renderCars() {
+    const filteredCars = data.cars.filter((car) => {
+      const brand = car.brand || "";
+      const model = car.model || "";
+      const location = car.location || "";
+      const plate = car.license_plate || "";
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        brand.toLowerCase().includes(searchLower) ||
+        model.toLowerCase().includes(searchLower) ||
+        location.toLowerCase().includes(searchLower) ||
+        plate.toLowerCase().includes(searchLower)
+      );
+    });
+
+    const activeCarsCount = data.cars.filter((car) => car.is_active).length;
+    const finalTotalPages = Math.ceil(filteredCars.length / CARS_PER_PAGE);
+    const paginatedCars = filteredCars.slice((currentPage - 1) * CARS_PER_PAGE, currentPage * CARS_PER_PAGE);
+
     return (
       <>
         <section className={styles.panel}>
           <PanelHeader
-            title={carForm.id ? "Edit Car" : "Add a New Car"}
-            text="Listings are owned by your user account and visible only when active and available."
-            action={carForm.id ? (
-              <button type="button" className={styles.secondaryButton} onClick={() => setCarForm(emptyCarForm)}>New Car</button>
-            ) : null}
-          />
-          <form className={styles.formGrid} onSubmit={handleCarSubmit}>
-            <Field label="Brand"><input required value={carForm.brand} onChange={(e) => setCarForm({ ...carForm, brand: e.target.value })} /></Field>
-            <Field label="Model"><input required value={carForm.model} onChange={(e) => setCarForm({ ...carForm, model: e.target.value })} /></Field>
-            <Field label="Category">
-              <select value={carForm.category} onChange={(e) => setCarForm({ ...carForm, category: e.target.value })}>
-                {["sedan", "suv", "hatchback", "pickup", "van", "luxury"].map((category) => <option key={category} value={category}>{category}</option>)}
-              </select>
-            </Field>
-            <Field label="Year"><input type="number" required min="1980" max="2100" value={carForm.year} onChange={(e) => setCarForm({ ...carForm, year: e.target.value })} /></Field>
-            <Field label="Daily Price"><input type="number" required min="1" value={carForm.price_per_day} onChange={(e) => setCarForm({ ...carForm, price_per_day: e.target.value })} /></Field>
-            <Field label="Location"><input required value={carForm.location} onChange={(e) => setCarForm({ ...carForm, location: e.target.value })} /></Field>
-            <Field label="License Plate"><input required value={carForm.license_plate} onChange={(e) => setCarForm({ ...carForm, license_plate: e.target.value })} /></Field>
-            <Field label="Seats"><input type="number" required min="1" value={carForm.seats} onChange={(e) => setCarForm({ ...carForm, seats: e.target.value })} /></Field>
-            <Field label="Fuel Type">
-              <select value={carForm.fuel_type} onChange={(e) => setCarForm({ ...carForm, fuel_type: e.target.value })}>
-                {["petrol", "diesel", "electric", "hybrid"].map((fuel) => <option key={fuel} value={fuel}>{fuel}</option>)}
-              </select>
-            </Field>
-            <Field label="Transmission">
-              <select value={carForm.transmission} onChange={(e) => setCarForm({ ...carForm, transmission: e.target.value })}>
-                {["automatic", "manual"].map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </Field>
-            <Field label="Color"><input value={carForm.color} onChange={(e) => setCarForm({ ...carForm, color: e.target.value })} /></Field>
-            <Field label="Mileage"><input type="number" min="0" value={carForm.mileage} onChange={(e) => setCarForm({ ...carForm, mileage: e.target.value })} /></Field>
-            <Field label="Minimum Rental Days"><input type="number" min="1" value={carForm.minimum_rental_days} onChange={(e) => setCarForm({ ...carForm, minimum_rental_days: e.target.value })} /></Field>
-            <Field label="Maximum Rental Days"><input type="number" min="1" value={carForm.maximum_rental_days} onChange={(e) => setCarForm({ ...carForm, maximum_rental_days: e.target.value })} /></Field>
-
-            <Field label="Listing Flags">
-              <div className={styles.actionRow}>
-                <label className={styles.muted}><input type="checkbox" checked={carForm.is_active} onChange={(e) => setCarForm({ ...carForm, is_active: e.target.checked })} /> Active</label>
-                <label className={styles.muted}><input type="checkbox" checked={carForm.instant_booking} onChange={(e) => setCarForm({ ...carForm, instant_booking: e.target.checked })} /> Instant booking</label>
-                <label className={styles.muted}><input type="checkbox" checked={carForm.delivery_available} onChange={(e) => setCarForm({ ...carForm, delivery_available: e.target.checked })} /> Delivery</label>
-              </div>
-            </Field>
-            <Field label="Features" full>
-              <div className={styles.actionRow}>
-                {["GPS", "Bluetooth", "Air Conditioning", "Child Seat", "Sunroof", "Backup Camera", "USB Charging", "Heated Seats"].map((f) => (
-                  <label key={f} className={styles.muted}>
-                    <input
-                      type="checkbox"
-                      checked={carForm.features.includes(f)}
-                      onChange={(e) => {
-                        const next = e.target.checked ? [...carForm.features, f] : carForm.features.filter((x) => x !== f);
-                        setCarForm({ ...carForm, features: next });
-                      }}
-                    /> {f}
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <Field label="Description" full><textarea value={carForm.description} onChange={(e) => setCarForm({ ...carForm, description: e.target.value })} /></Field>
-            
-            {!carForm.id && (
-              <Field label="Vehicle Images (1-5)" full>
-                <div style={{ padding: "12px", border: "1px dashed var(--gray-6)", borderRadius: "var(--radius-md)", background: "var(--gray-2)" }}>
+            title={`Manage My Cars (${activeCarsCount} Active)`}
+            text="View, edit, filter, activate/deactivate, or add vehicle listings to your rental fleet."
+            action={
+              <div className={styles.headerActionsGroup}>
+                <div className={styles.searchBarContainer}>
+                  <div className={styles.searchIconWrapper}>
+                    <Icon name="search" size={18} />
+                  </div>
                   <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                    type="text"
+                    placeholder="Search your cars..."
+                    value={searchQuery}
                     onChange={(e) => {
-                      if (e.target.files) {
-                        const files = Array.from(e.target.files).slice(0, 5); // Max 5 images
-                        setSelectedFiles(files);
-                      }
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
                     }}
+                    className={styles.searchBarInput}
                   />
-                  <p className={styles.muted} style={{ marginTop: 8, fontSize: "0.85rem" }}>
-                    {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected.` : "Select up to 5 images. High quality photos increase bookings!"}
-                  </p>
                 </div>
-              </Field>
-            )}
-            <div className={styles.fieldFull}>
-              <button className={styles.button} type="submit" disabled={busy}>{busy ? "Saving..." : carForm.id ? "Save Car" : "Add Car"}</button>
-            </div>
-          </form>
-        </section>
+                <button
+                  type="button"
+                  className={styles.button}
+                  onClick={() => {
+                    setCarForm(emptyCarForm);
+                    setSelectedFiles([]);
+                    setError("");
+                    setNotice("");
+                    setIsModalOpen(true);
+                  }}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  + Add New Car
+                </button>
+              </div>
+            }
+          />
 
-        <section className={styles.tableCard}>
-          {data.cars.length > 0 ? (
-            <table className={styles.table}>
-              <thead>
-                <tr><th>Listing</th><th>Status</th><th>Daily Price</th><th>Rating</th><th>Bookings</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {data.cars.map((car) => {
-                  const approvalStatus = (car.approval_status ?? "approved").toLowerCase();
-                  const isRejected = approvalStatus === "rejected";
-                  const isPending = approvalStatus === "pending";
+          {paginatedCars.length > 0 ? (
+            <div className={styles.carsGrid}>
+              {paginatedCars.map((car) => {
+                const approvalStatus = (car.approval_status ?? "approved").toLowerCase();
+                const isRejected = approvalStatus === "rejected";
+                const isPending = approvalStatus === "pending";
+                const isActive = car.is_active;
 
-                  return (
-                    <tr key={car.id}>
-                      <td>
-                        <div className={styles.carCell}>
-                          {car.images[0] ? <img className={styles.thumb} src={car.images[0].image_url} alt={`${car.brand} ${car.model}`} /> : <span className={styles.thumb}><Icon name="car" /></span>}
-                          <div>
-                            <span className={styles.strong}>{car.brand} {car.model}</span>
-                            <span className={styles.muted}>{car.year} · {car.location}</span>
-                            {isRejected && car.rejection_reason && (
-                              <div className={styles.muted} style={{ color: "#be123c", marginTop: 4, maxWidth: 220 }}>
-                                Rejected: {car.rejection_reason}
-                              </div>
-                            )}
-                          </div>
+                return (
+                  <div key={car.id} className={styles.carCard}>
+                    <div className={styles.carImageWrapper}>
+                      {car.images[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className={styles.carImage} src={car.images[0].image_url} alt={`${car.brand} ${car.model}`} />
+                      ) : (
+                        <div className={styles.carPlaceholder}>
+                          <Icon name="car" size={32} />
                         </div>
-                      </td>
-                      <td>
-                        <div style={{ display: "grid", gap: 6 }}>
-                          <span className={`${styles.badge} ${car.status === "available" ? styles.badgeGreen : styles.badgeRed}`}>{car.is_active ? car.status : "hidden"}</span>
-                          <span className={`${styles.badge} ${isRejected ? styles.badgeRed : isPending ? styles.badgeAmber : styles.badgeGreen}`}>
-                            {approvalStatus}
+                      )}
+                    </div>
+                    
+                    <div className={styles.carCardContent}>
+                      <div className={styles.carCardTitleRow}>
+                        <h3 className={styles.carCardTitle}>{car.year ? `${car.year} ` : ''}{car.brand} {car.model}</h3>
+                        <span className={`${styles.badge} ${isActive ? styles.badgeGreen : styles.badgeRed}`}>
+                          {isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+
+                      <div className={styles.carCardDetails}>
+                        <div className={styles.detailItem}>
+                          <span className={styles.detailLabel}>License Plate:</span>
+                          <span className={styles.detailVal}>{car.license_plate}</span>
+                        </div>
+                        <div className={styles.detailItem}>
+                          <span className={styles.detailLabel}>Location:</span>
+                          <span className={styles.detailVal}>{car.location}</span>
+                        </div>
+                      </div>
+
+                      <div className={styles.keyMetrics}>
+                        <div className={styles.metricItem}>
+                          <span className={styles.metricLabel}>Trips</span>
+                          <span className={styles.metricVal}>{car.booking_count}</span>
+                        </div>
+                        <div className={styles.metricSeparator}>|</div>
+                        <div className={styles.metricItem}>
+                          <span className={styles.metricLabel}>Rating</span>
+                          <span className={styles.metricVal}>
+                            {car.avg_rating || "New"} {car.avg_rating ? <span style={{ color: "#fbbf24", marginLeft: 2 }}>★</span> : null}
                           </span>
                         </div>
-                      </td>
-                      <td>{formatCurrency(car.price_per_day)}</td>
-                      <td>{car.avg_rating || "New"} <span className={styles.muted}>({car.review_count})</span></td>
-                      <td>{car.booking_count}</td>
-                      <td>
-                        <div className={styles.actionRow}>
-                          <button className={styles.tinyButton} onClick={() => {
-                            setCarForm(carToForm(car));
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}>Edit</button>
-                          <button className={styles.tinyButton} onClick={() => setImageCarId(car.id)}>Images</button>
-                          <button className={styles.tinyButton} onClick={() => handleCarStatus(car.id, "hide")}>Hide</button>
-                          <button className={styles.tinyButton} onClick={() => handleCarStatus(car.id, "reactivate")}>Reactivate</button>
-                          {isRejected && (
-                            <button className={styles.tinyButton} onClick={() => handleCarStatus(car.id, "resubmit")}>Resubmit</button>
-                          )}
-                          <button className={styles.dangerButton} onClick={() => handleCarStatus(car.id, "delete")}>Delete</button>
+                        <div className={styles.metricSeparator}>|</div>
+                        <div className={styles.metricItem}>
+                          <span className={styles.metricLabel}>Earnings</span>
+                          <span className={styles.metricVal}>{formatCurrency(car.total_earnings || 0)}</span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : <EmptyState text="No cars yet. Add your first listing above." />}
+                      </div>
+
+                      {isRejected && car.rejection_reason && (
+                        <div className={styles.rejectionNotice}>
+                          Rejected: {car.rejection_reason}
+                        </div>
+                      )}
+                      {isPending && (
+                        <div className={styles.pendingNotice}>
+                          Pending Admin Review
+                        </div>
+                      )}
+
+                      <div className={styles.cardButtonRow}>
+                        <button 
+                          className={styles.tinyButton} 
+                          onClick={() => {
+                            setCarForm(carToForm(car));
+                            setError("");
+                            setNotice("");
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <Icon name="edit" size={14} />
+                          Edit
+                        </button>
+                        
+                        <button 
+                          className={styles.tinyButton} 
+                          onClick={() => handleCarStatus(car.id, isActive ? "hide" : "reactivate")}
+                        >
+                          {isActive ? "Deactivate" : "Activate"}
+                        </button>
+
+                        {isRejected && (
+                          <button 
+                            className={styles.tinyButton} 
+                            onClick={() => handleCarStatus(car.id, "resubmit")}
+                          >
+                            Resubmit
+                          </button>
+                        )}
+
+                        <button 
+                          className={styles.dangerButton} 
+                          onClick={() => handleCarStatus(car.id, "delete")}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState text="No cars found. Add a new listing or adjust your search query." />
+          )}
+
+          {finalTotalPages > 1 && (
+            <div className={styles.paginationWrapper}>
+              {Array.from({ length: finalTotalPages }, (_, idx) => idx + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`${styles.pageNumber} ${currentPage === page ? styles.pageNumberActive : ""}`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
-        <section className={styles.panel}>
-          <PanelHeader title="Images" text="Upload multiple photos. Supported formats: JPEG, PNG, WebP." />
-          {selectedImageCar ? (
-            <>
-              <div className={styles.actionRow} style={{ marginBottom: 16 }}>
-                <select className={styles.secondaryButton} value={selectedImageCar.id} onChange={(e) => setImageCarId(Number(e.target.value))}>
-                  {data.cars.map((car) => <option key={car.id} value={car.id}>{car.brand} {car.model}</option>)}
-                </select>
+        {isModalOpen && (
+          <div className={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
+            <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalHeader}>
+                <h2 className={styles.modalTitle}>{carForm.id ? `Edit Vehicle: ${carForm.brand} ${carForm.model}` : "Add a New Vehicle Listing"}</h2>
+                <button className={styles.modalCloseBtn} onClick={() => setIsModalOpen(false)}>✕</button>
               </div>
-              <ImageUploader 
-                carId={selectedImageCar.id} 
-                images={selectedImageCar.images} 
-                onRefresh={() => router.refresh()} 
-              />
-            </>
-          ) : <EmptyState text="Add a car before managing images." />}
-        </section>
+              
+              <div className={styles.modalBody}>
+                {notice ? <div className={styles.toast} style={{ position: "static", marginBottom: 16 }}>{notice}</div> : null}
+                {error ? <div className={`${styles.toast} ${styles.toastError}`} style={{ position: "static", marginBottom: 16 }}>{error}</div> : null}
+
+                <form className={styles.formGrid} onSubmit={handleCarSubmit}>
+                  <Field label="Brand"><input required value={carForm.brand} onChange={(e) => setCarForm({ ...carForm, brand: e.target.value })} /></Field>
+                  <Field label="Model"><input required value={carForm.model} onChange={(e) => setCarForm({ ...carForm, model: e.target.value })} /></Field>
+                  <Field label="Category">
+                    <select value={carForm.category} onChange={(e) => setCarForm({ ...carForm, category: e.target.value })}>
+                      {["sedan", "suv", "hatchback", "pickup", "van", "luxury"].map((category) => <option key={category} value={category}>{category}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Year"><input type="number" required min="1980" max="2100" value={carForm.year} onChange={(e) => setCarForm({ ...carForm, year: e.target.value })} /></Field>
+                  <Field label="Daily Price"><input type="number" required min="1" value={carForm.price_per_day} onChange={(e) => setCarForm({ ...carForm, price_per_day: e.target.value })} /></Field>
+                  <Field label="Location"><input required value={carForm.location} onChange={(e) => setCarForm({ ...carForm, location: e.target.value })} /></Field>
+                  <Field label="License Plate"><input required value={carForm.license_plate} onChange={(e) => setCarForm({ ...carForm, license_plate: e.target.value })} /></Field>
+                  <Field label="Seats"><input type="number" required min="1" value={carForm.seats} onChange={(e) => setCarForm({ ...carForm, seats: e.target.value })} /></Field>
+                  <Field label="Fuel Type">
+                    <select value={carForm.fuel_type} onChange={(e) => setCarForm({ ...carForm, fuel_type: e.target.value })}>
+                      {["petrol", "diesel", "electric", "hybrid"].map((fuel) => <option key={fuel} value={fuel}>{fuel}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Transmission">
+                    <select value={carForm.transmission} onChange={(e) => setCarForm({ ...carForm, transmission: e.target.value })}>
+                      {["automatic", "manual"].map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Color"><input value={carForm.color} onChange={(e) => setCarForm({ ...carForm, color: e.target.value })} /></Field>
+                  <Field label="Mileage"><input type="number" min="0" value={carForm.mileage} onChange={(e) => setCarForm({ ...carForm, mileage: e.target.value })} /></Field>
+                  <Field label="Minimum Rental Days"><input type="number" min="1" value={carForm.minimum_rental_days} onChange={(e) => setCarForm({ ...carForm, minimum_rental_days: e.target.value })} /></Field>
+                  <Field label="Maximum Rental Days"><input type="number" min="1" value={carForm.maximum_rental_days} onChange={(e) => setCarForm({ ...carForm, maximum_rental_days: e.target.value })} /></Field>
+
+                  <Field label="Listing Flags">
+                    <div className={styles.actionRow}>
+                      <label className={styles.muted}><input type="checkbox" checked={carForm.is_active} onChange={(e) => setCarForm({ ...carForm, is_active: e.target.checked })} /> Active</label>
+                      <label className={styles.muted}><input type="checkbox" checked={carForm.instant_booking} onChange={(e) => setCarForm({ ...carForm, instant_booking: e.target.checked })} /> Instant booking</label>
+                      <label className={styles.muted}><input type="checkbox" checked={carForm.delivery_available} onChange={(e) => setCarForm({ ...carForm, delivery_available: e.target.checked })} /> Delivery</label>
+                    </div>
+                  </Field>
+                  <Field label="Features" full>
+                    <div className={styles.actionRow}>
+                      {["GPS", "Bluetooth", "Air Conditioning", "Child Seat", "Sunroof", "Backup Camera", "USB Charging", "Heated Seats"].map((f) => (
+                        <label key={f} className={styles.muted}>
+                          <input
+                            type="checkbox"
+                            checked={carForm.features.includes(f)}
+                            onChange={(e) => {
+                              const next = e.target.checked ? [...carForm.features, f] : carForm.features.filter((x) => x !== f);
+                              setCarForm({ ...carForm, features: next });
+                            }}
+                          /> {f}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Description" full><textarea value={carForm.description} onChange={(e) => setCarForm({ ...carForm, description: e.target.value })} /></Field>
+                  
+                  {!carForm.id && (
+                    <Field label="Vehicle Images (1-5)" full>
+                      <div style={{ padding: "12px", border: "1px dashed var(--owner-border)", borderRadius: "16px", background: "var(--owner-secondary)" }}>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              const files = Array.from(e.target.files).slice(0, 5);
+                              setSelectedFiles(files);
+                            }
+                          }}
+                        />
+                        <p className={styles.muted} style={{ marginTop: 8, fontSize: "0.85rem" }}>
+                          {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected.` : "Select up to 5 images. High quality photos increase bookings!"}
+                        </p>
+                      </div>
+                    </Field>
+                  )}
+                  
+                  <div className={styles.fieldFull}>
+                    <button className={styles.button} type="submit" disabled={busy} style={{ width: "100%" }}>
+                      {busy ? "Saving..." : carForm.id ? "Save Car" : "Add Car"}
+                    </button>
+                  </div>
+                </form>
+
+                {carForm.id && (
+                  <div style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid var(--owner-border)" }}>
+                    <PanelHeader title="Manage Vehicle Images" text="Upload, reorder, or set primary cover photo." />
+                    <ImageUploader 
+                      carId={carForm.id} 
+                      images={data.cars.find(c => c.id === carForm.id)?.images || []} 
+                      onRefresh={() => router.refresh()} 
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
@@ -738,113 +846,71 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
     );
   }
 
-  function renderCalendar() {
-    const calendar = buildCalendar(selectedDate, data);
-    const selectedItems = calendar.itemsForDate(selectedDate);
 
-    return (
-      <div className={styles.twoGrid}>
-        <section className={styles.panel}>
-          <PanelHeader title={new Date(selectedDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })} text="Booked and blocked dates are marked below." />
-          <div className={styles.calendarGrid}>
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day} className={styles.weekday}>{day}</span>)}
-            {calendar.days.map((day) => {
-              const items = calendar.itemsForDate(day.dateKey);
-              return (
-                <button key={day.dateKey} type="button" className={`${styles.day} ${day.inMonth ? "" : styles.dayMuted} ${day.dateKey === selectedDate ? styles.daySelected : ""}`} onClick={() => setSelectedDate(day.dateKey)}>
-                  <span className={styles.dayNumber}>{day.date.getDate()}</span>
-                  {items.slice(0, 2).map((item) => <span key={item} className={styles.dayPill}>{item}</span>)}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-        <section className={styles.panel}>
-          <PanelHeader title={formatDate(selectedDate)} text="Reservation and availability detail for the selected day." />
-          {selectedItems.length > 0 ? <div className={styles.list}>{selectedItems.map((item) => <div key={item} className={styles.listItem}><span className={styles.strong}>{item}</span></div>)}</div> : <EmptyState text="Available day. No bookings or owner blocks." />}
-        </section>
-      </div>
-    );
-  }
-
-  function renderAvailability() {
-    return (
-      <>
-        <AvailabilityForm cars={data.cars} busy={busy} onSubmit={(payload) => void api("/api/owner/availability", { method: "POST", body: JSON.stringify(payload) })} />
-        <section className={styles.panel}>
-          <PanelHeader title="Blocked Dates" text="Owner blocked days are unavailable to renters." />
-          {data.availability.length > 0 ? (
-            <div className={styles.list}>
-              {data.availability.map((block) => (
-                <div key={block.id} className={styles.listItem}>
-                  <div><span className={styles.strong}>{block.brand} {block.model}</span><span className={styles.muted}>{formatDate(block.start_date)} - {formatDate(block.end_date)} · {block.reason || "Owner blocked"}</span></div>
-                  <button className={styles.dangerButton} onClick={() => void api("/api/owner/availability", { method: "DELETE", body: JSON.stringify({ id: block.id }) })}>Remove</button>
-                </div>
-              ))}
-            </div>
-          ) : <EmptyState text="No blocked dates." />}
-        </section>
-      </>
-    );
-  }
-
-
-
-  function renderDocuments() {
-    return (
-      <>
-        <DocumentForm cars={data.cars} busy={busy} onSubmit={(payload) => void api("/api/owner/documents", { method: "POST", body: JSON.stringify(payload) })} />
-        <DocumentList documents={data.documents} remove={(id) => void api("/api/owner/documents", { method: "DELETE", body: JSON.stringify({ id }) })} />
-      </>
-    );
-  }
-
-  function renderAnalytics() {
-    return (
-      <div className={styles.grid}>
-        <MetricCard label="Profile Views" value={data.metrics.profileViews} />
-        <MetricCard label="Car Views" value={data.metrics.carViews} />
-        <MetricCard label="Bookings" value={data.metrics.bookings} />
-        <MetricCard label="Conversion Rate" value={`${data.metrics.conversionRate}%`} />
-        <MetricCard label="Occupancy Rate" value={`${data.metrics.occupancyRate}%`} />
-        <MetricCard label="Revenue" value={formatCurrency(data.metrics.lifetimeEarnings)} />
-        <MetricCard label="Cancellation Rate" value={`${data.metrics.cancellationRate}%`} />
-        <MetricCard label="Most Popular Vehicle" value={data.metrics.mostPopularVehicle} />
-      </div>
-    );
-  }
-
-  function renderProfile() {
-    return <OwnerProfileForm profile={profile} ownerProfile={data.ownerProfile} metrics={data.metrics} busy={busy} onSubmit={(payload) => void api("/api/owner/profile", { method: "PATCH", body: JSON.stringify(payload) })} />;
-  }
 
   return (
     <AppScreen profile={profile} requireAuth>
       <div className={styles.ownerPage}>
         <div className={styles.ownerShell}>
           <aside className={styles.sideNav}>
-            <h2 className={styles.sideTitle}>Owner Dashboard</h2>
-            <nav className={styles.navList} aria-label="Owner dashboard navigation">
-              {ownerNav.map((item) => (
-                <Link key={item.href} href={item.href} className={`${styles.navItem} ${item.section === section || (section === "booking-detail" && item.section === "bookings") ? styles.navItemActive : ""}`}>
-                  <Icon name={item.icon} size={18} />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </nav>
+            <div className={styles.sideNavContainer}>
+              <h2 className={styles.sideTitle}>Owner Dashboard</h2>
+              <nav className={styles.navList} aria-label="Owner dashboard navigation">
+                {ownerNav.map((item) => (
+                  <Link key={item.href} href={item.href} className={`${styles.navItem} ${item.section === section || (section === "booking-detail" && item.section === "bookings") ? styles.navItemActive : ""}`}>
+                    <Icon name={item.icon} size={18} />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
+            <button 
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout', { method: 'POST' });
+                  window.location.href = '/';
+                } catch (err) {
+                  console.error('Logout error:', err);
+                }
+              }}
+              className={styles.logoutButton}
+            >
+              <Icon name="logout" size={18} />
+              <span>Logout</span>
+            </button>
           </aside>
           <main className={styles.content}>
-            <header className={styles.hero}>
-              <div>
-                <p className={styles.eyebrow}>Fleet operations</p>
-                <h1 className={styles.title}>{headerTitle()}</h1>
-                <p className={styles.subtitle}>{sectionDescription()}</p>
-              </div>
-              <div className={styles.heroActions}>
-                <Link href="/owner/cars" className={styles.button}><Icon name="car" size={18} /> Add / Manage Cars</Link>
-                <Link href="/owner/bookings" className={styles.secondaryButton}>Review Bookings</Link>
-              </div>
-            </header>
+            {section !== "cars" && (
+              <header className={styles.hero}>
+                <div>
+                  <p className={styles.eyebrow}>Fleet operations</p>
+                  <h1 className={styles.title}>{headerTitle()}</h1>
+                  <p className={styles.subtitle}>{sectionDescription()}</p>
+                </div>
+                <div className={styles.heroActions}>
+                  {isCarsSection ? (
+                    <button
+                      type="button"
+                      className={styles.button}
+                      onClick={() => {
+                        setCarForm(emptyCarForm);
+                        setSelectedFiles([]);
+                        setError("");
+                        setNotice("");
+                        setIsModalOpen(true);
+                      }}
+                    >
+                      + Add New Car
+                    </button>
+                  ) : (
+                    <>
+                      <Link href="/owner/cars" className={styles.button}><Icon name="car" size={18} /> Add / Manage Cars</Link>
+                      <Link href="/owner/bookings" className={styles.secondaryButton}>Review Bookings</Link>
+                    </>
+                  )}
+                </div>
+              </header>
+            )}
 
             {notice ? <div className={styles.toast}>{notice}</div> : null}
             {error ? <div className={`${styles.toast} ${styles.toastError}`}>{error}</div> : null}
@@ -953,124 +1019,4 @@ function ReviewList({ reviews }: { reviews: OwnerDashboardReview[] }) {
   ) : <EmptyState text="No reviews match this filter." />;
 }
 
-function AvailabilityForm({ cars, busy, onSubmit }: { cars: OwnerDashboardCar[]; busy: boolean; onSubmit: (payload: Record<string, unknown>) => void }) {
-  const [carId, setCarId] = useState(cars[0]?.id || "");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [reason, setReason] = useState("I'm using my own car.");
 
-  return (
-    <section className={styles.panel}>
-      <PanelHeader title="Block Dates" text="Blocked days become unavailable for renters." />
-      <form className={styles.formGrid} onSubmit={(event) => { event.preventDefault(); onSubmit({ car_id: Number(carId), start_date: startDate, end_date: endDate, reason }); }}>
-        <Field label="Vehicle"><select required value={carId} onChange={(e) => setCarId(e.target.value)}>{cars.map((car) => <option key={car.id} value={car.id}>{car.brand} {car.model}</option>)}</select></Field>
-        <Field label="Start Date"><input required type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
-        <Field label="End Date"><input required type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></Field>
-        <Field label="Reason"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-        <button className={styles.button} disabled={busy || !cars.length}>Block Dates</button>
-      </form>
-    </section>
-  );
-}
-
-
-
-function DocumentForm({ cars, busy, onSubmit }: { cars: OwnerDashboardCar[]; busy: boolean; onSubmit: (payload: Record<string, unknown>) => void }) {
-  const [carId, setCarId] = useState(cars[0]?.id || "");
-  const [documentType, setDocumentType] = useState("Insurance");
-  const [fileUrl, setFileUrl] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-
-  return (
-    <section className={styles.panel}>
-      <PanelHeader title="Upload Vehicle Document" text="Use accessible file URLs for now; storage can be swapped in later." />
-      <form className={styles.formGrid} onSubmit={(event) => { event.preventDefault(); onSubmit({ car_id: Number(carId), document_type: documentType, file_url: fileUrl, expiry_date: expiryDate || null }); }}>
-        <Field label="Vehicle"><select required value={carId} onChange={(e) => setCarId(e.target.value)}>{cars.map((car) => <option key={car.id} value={car.id}>{car.brand} {car.model}</option>)}</select></Field>
-        <Field label="Document Type"><select value={documentType} onChange={(e) => setDocumentType(e.target.value)}>{["Insurance", "Registration", "Bluebook", "Tax", "Pollution Certificate"].map((item) => <option key={item}>{item}</option>)}</select></Field>
-        <Field label="File URL"><input required value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://..." /></Field>
-        <Field label="Expiry Date"><input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} /></Field>
-        <button className={styles.button} disabled={busy || !cars.length}>Save Document</button>
-      </form>
-    </section>
-  );
-}
-
-function DocumentList({ documents, remove }: { documents: CarDocument[]; remove: (id: number) => void }) {
-  return (
-    <section className={styles.panel}>
-      <PanelHeader title="Vehicle Documents" text="Documents with nearby expirations should be renewed promptly." />
-      {documents.length > 0 ? <div className={styles.list}>{documents.map((document) => <div key={document.id} className={styles.listItem}><div><span className={styles.strong}>{document.document_type} · {document.brand} {document.model}</span><span className={styles.muted}>Expires {formatDate(document.expiry_date)} · <a href={document.file_url} target="_blank">View document</a></span></div><button className={styles.dangerButton} onClick={() => remove(document.id)}>Delete</button></div>)}</div> : <EmptyState text="No documents uploaded yet." />}
-    </section>
-  );
-}
-
-function OwnerProfileForm({ profile, ownerProfile, metrics, busy, onSubmit }: { profile: UserProfile; ownerProfile: OwnerDashboardData["ownerProfile"]; metrics: OwnerDashboardData["metrics"]; busy: boolean; onSubmit: (payload: Record<string, unknown>) => void }) {
-  const [form, setForm] = useState({
-    business_name: ownerProfile?.business_name || "",
-    phone: ownerProfile?.phone || profile.phoneNumber || "",
-    email: ownerProfile?.email || profile.email,
-    address: ownerProfile?.address || "",
-    bank_name: ownerProfile?.bank_name || "",
-    bank_account_name: ownerProfile?.bank_account_name || "",
-    bank_account_number: ownerProfile?.bank_account_number || "",
-    payment_details: ownerProfile?.payment_details || "",
-    profile_photo: ownerProfile?.profile_photo || profile.profileImage || "",
-  });
-
-  return (
-    <>
-      <div className={styles.grid}>
-        <MetricCard label="Average Rating" value={metrics.averageRating || "New"} />
-        <MetricCard label="Total Reviews" value={metrics.totalReviews} />
-        <MetricCard label="Total Cars" value={metrics.totalCars} />
-        <MetricCard label="Lifetime Earnings" value={formatCurrency(metrics.lifetimeEarnings)} />
-      </div>
-      <section className={styles.panel}>
-        <PanelHeader title="Owner Profile" text="Business, contact, address, bank, payout, and profile photo information." />
-        <form className={styles.formGrid} onSubmit={(event) => { event.preventDefault(); onSubmit(form); }}>
-          {Object.entries(form).map(([key, value]) => (
-            <Field key={key} label={key.replaceAll("_", " ")}>
-              <input value={value} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-            </Field>
-          ))}
-          <button className={styles.button} disabled={busy}>Save Profile</button>
-        </form>
-      </section>
-    </>
-  );
-}
-
-function buildCalendar(selectedDate: string, data: OwnerDashboardData) {
-  const base = new Date(`${selectedDate}T00:00:00`);
-  const first = new Date(base.getFullYear(), base.getMonth(), 1);
-  const start = new Date(first);
-  start.setDate(first.getDate() - first.getDay());
-
-  const days = Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return {
-      date,
-      dateKey: date.toISOString().slice(0, 10),
-      inMonth: date.getMonth() === base.getMonth(),
-    };
-  });
-
-  const dateWithin = (dateKey: string, startDate: string, endDate: string) => dateKey >= startDate.slice(0, 10) && dateKey <= endDate.slice(0, 10);
-  const itemsForDate = (dateKey: string) => {
-    const items: string[] = [];
-    data.bookings.forEach((booking) => {
-      const status = normalizeStatus(booking.booking_status);
-      if (!["CANCELLED", "REJECTED", "EXPIRED", "PAYMENT_PENDING"].includes(status) && dateWithin(dateKey, booking.pickup_date, booking.return_date)) {
-        items.push(`Booked: ${booking.brand} ${booking.model}`);
-      }
-    });
-    data.availability.forEach((block) => {
-      if (dateWithin(dateKey, block.start_date, block.end_date)) items.push(`Blocked: ${block.brand} ${block.model}`);
-    });
-
-    return items;
-  };
-
-  return { days, itemsForDate };
-}

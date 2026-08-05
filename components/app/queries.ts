@@ -97,6 +97,7 @@ export const getCars = cache(async (): Promise<CarListing[]> => {
      FROM cars c
      WHERE c.is_active = true
        AND c.status = 'available'
+       AND LOWER(COALESCE(c.approval_status, 'pending')) = 'approved'
      ORDER BY c.created_at DESC`
   );
 
@@ -114,7 +115,9 @@ export const getCarById = cache(async (id: number): Promise<CarListing | null> =
        (SELECT COALESCE(AVG(r.rating), 0) FROM reviews r JOIN bookings b ON r.booking_id = b.id WHERE b.car_id = c.id) AS avg_rating,
        (SELECT COUNT(*) FROM reviews r JOIN bookings b ON r.booking_id = b.id WHERE b.car_id = c.id) AS review_count
      FROM cars c
-     WHERE c.id = $1`,
+     WHERE c.id = $1
+       AND c.is_active = true
+       AND LOWER(COALESCE(c.approval_status, 'pending')) = 'approved'`,
     [id]
   );
 

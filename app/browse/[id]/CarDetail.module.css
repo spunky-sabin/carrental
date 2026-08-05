@@ -742,6 +742,101 @@
   transform: none;
 }
 
+/* ─── Payment Options ─── */
+.paymentOptionsSection {
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.paymentOptionLabel {
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 2px;
+}
+
+.paymentOptionCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.paymentOptionCard:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+.paymentOptionActive {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.15);
+}
+
+.paymentOptionBadge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.esewaBadge {
+  background: #60bb46;
+  color: #ffffff;
+}
+
+.paybridgeBadge {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.paymentOptionMeta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.paymentOptionTitle {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.paymentOptionSubtitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.testCredentialsBox {
+  margin-top: 4px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #166534;
+}
+
+.testCredentialsTitle {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

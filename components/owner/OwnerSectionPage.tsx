@@ -10,13 +10,7 @@ type OwnerSection =
   | "booking-detail"
   | "earnings"
   | "reviews"
-  | "notifications"
-  | "calendar"
-  | "availability"
-  | "maintenance"
-  | "documents"
-  | "analytics"
-  | "profile";
+  | "notifications";
 
 export default async function OwnerSectionPage({
   section,

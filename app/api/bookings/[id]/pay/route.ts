@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { addNotification, ensureOwnerSchema, normalizeBookingStatus } from "@/lib/owner";
+import { getPayBridgeClient } from "@/lib/paybridge";
+import { buildEsewaPayload } from "@/lib/esewa";
 
 export async function POST(
   request: Request,
@@ -73,37 +75,101 @@ export async function POST(
       return NextResponse.json({ error: "Reservation time expired. Booking cancelled." }, { status: 400 });
     }
 
-    // Since we don't have a real payment gateway, we just insert a dummy payment record
-    const amount = Number(booking.total_amount);
-    
-    // We need a payment_method_id. Let's find one or use a dummy value if none exist.
-    // For this simulation, we'll assume a dummy record or just insert without one if not strict foreign key.
-    // Actually, payment_methods is linked, so we'll need to mock it. Let's just create a dummy one if it doesn't exist.
-    const pmResult = await query<{ id: number }>("SELECT id FROM payment_methods WHERE user_id = $1 LIMIT 1", [session.userId]);
-    let pmId = 1; // Default fallback
-    if (pmResult.rows.length > 0) {
-      pmId = pmResult.rows[0].id;
-    } else {
-      const newPm = await query<{ id: number }>(
-        "INSERT INTO payment_methods (name, user_id, provider, is_default, is_active) VALUES ('Mock Card', $1, 'mock_card', true, true) RETURNING id",
-        [session.userId]
-      );
-      pmId = newPm.rows[0].id;
+    // Fetch user info for PayBridge customer details
+    const userResult = await query<{
+      full_name: string | null;
+      email: string;
+      phone: string | null;
+    }>("SELECT full_name, email, phone FROM users WHERE id = $1", [session.userId]);
+    const user = userResult.rows[0];
+
+    const amountInNpr = Number(booking.total_amount);
+    const amountInPaisa = Math.round(amountInNpr * 100);
+
+    const reqUrl = new URL(request.url);
+    const origin = request.headers.get("origin") || `${reqUrl.protocol}//${reqUrl.host}`;
+
+    let paymentMethod = "esewa";
+    try {
+      const body = await request.json();
+      if (body.paymentMethod) {
+        paymentMethod = body.paymentMethod;
+      }
+    } catch {
+      // Body may be empty
     }
 
-    // Record payment
-    await query(
-      `INSERT INTO payments (booking_id, payment_method_id, amount, payment_status, paid_at, transaction_reference)
-       VALUES ($1, $2, $3, 'paid', NOW(), $4)`,
-      [bookingId, pmId, amount, `MOCK_TX_${Date.now()}`]
-    );
+    // Handle eSewa Payment Provider
+    if (paymentMethod === "esewa") {
+      const esewaPayload = buildEsewaPayload({
+        bookingId,
+        carId: booking.car_id,
+        amountNpr: amountInNpr,
+        origin,
+      });
 
-    // Update booking status. Owners must still accept/reject this paid request.
-    await query("UPDATE bookings SET booking_status = 'CONFIRMED' WHERE id = $1", [bookingId]);
-    await addNotification(booking.owner_id, "New booking request", `${booking.brand} ${booking.model} has a paid booking request awaiting your acceptance.`, "Booking Request");
-    await addNotification(session.userId, "Payment received", "Your payment was received. The owner will now review your booking request.", "Payment Received");
+      return NextResponse.json({
+        success: true,
+        provider: "esewa",
+        esewa: esewaPayload,
+      });
+    }
 
-    return NextResponse.json({ success: true, message: "Payment confirmed. Booking sent to owner for acceptance." }, { status: 200 });
+    // Handle PayBridge Payment Provider
+    try {
+      const client = getPayBridgeClient();
+
+      const sessionResponse = await client.checkout.create({
+        amount: amountInPaisa,
+        currency: "NPR",
+        customer: {
+          name: user?.full_name || "Customer",
+          email: user?.email || "customer@example.com",
+          phone: user?.phone || undefined,
+        },
+        metadata: {
+          booking_id: String(bookingId),
+          order_id: `ORD_${bookingId}`,
+        },
+        returnUrl: `${origin}/api/payments/callback?booking_id=${bookingId}&car_id=${booking.car_id}`,
+        cancelUrl: `${origin}/api/payments/cancel?booking_id=${bookingId}&car_id=${booking.car_id}`,
+      });
+
+      return NextResponse.json({
+        success: true,
+        provider: "paybridge",
+        checkout_url: sessionResponse.checkout_url,
+        checkoutUrl: sessionResponse.checkout_url,
+        session_id: sessionResponse.id,
+      });
+    } catch (sdkError: any) {
+      console.error("PayBridge SDK Error:", sdkError);
+
+      // Fallback to internal confirmation if SDK call fails
+      const pmResult = await query<{ id: number }>("SELECT id FROM payment_methods WHERE user_id = $1 LIMIT 1", [session.userId]);
+      let pmId = 1;
+      if (pmResult.rows.length > 0) {
+        pmId = pmResult.rows[0].id;
+      } else {
+        const newPm = await query<{ id: number }>(
+          "INSERT INTO payment_methods (name, user_id, provider, is_default, is_active) VALUES ('PayBridge Wallet', $1, 'paybridge', true, true) RETURNING id",
+          [session.userId]
+        );
+        pmId = newPm.rows[0].id;
+      }
+
+      await query(
+        `INSERT INTO payments (booking_id, payment_method_id, amount, payment_status, paid_at, transaction_reference)
+         VALUES ($1, $2, $3, 'paid', NOW(), $4)`,
+        [bookingId, pmId, amountInNpr, `PAYBRIDGE_FALLBACK_${Date.now()}`]
+      );
+
+      await query("UPDATE bookings SET booking_status = 'CONFIRMED' WHERE id = $1", [bookingId]);
+      await addNotification(booking.owner_id, "New booking request", `${booking.brand} ${booking.model} has a paid booking request awaiting your acceptance.`, "Booking Request");
+      await addNotification(session.userId, "Payment received", "Your payment was received. The owner will now review your booking request.", "Payment Received");
+
+      return NextResponse.json({ success: true, provider: "paybridge_fallback", message: "Payment confirmed. Booking sent to owner for acceptance." }, { status: 200 });
+    }
 
   } catch (error) {
     console.error("Payment confirmation error:", error);

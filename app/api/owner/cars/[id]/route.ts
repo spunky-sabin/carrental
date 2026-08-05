@@ -115,6 +115,31 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Car not found." }, { status: 404 });
   }
 
-  await query("UPDATE cars SET is_active = false, status = 'inactive' WHERE id = $1 AND owner_id = $2", [carId, access.user.userId]);
-  return NextResponse.json({ message: "Listing deleted from active inventory." });
+  try {
+    // 1. Delete dependent booking records for all bookings of this car
+    await query("DELETE FROM booking_extensions WHERE booking_id IN (SELECT id FROM bookings WHERE car_id = $1)", [carId]);
+    await query("DELETE FROM damage_reports WHERE booking_id IN (SELECT id FROM bookings WHERE car_id = $1)", [carId]);
+    await query("DELETE FROM payments WHERE booking_id IN (SELECT id FROM bookings WHERE car_id = $1)", [carId]);
+    await query("DELETE FROM reviews WHERE booking_id IN (SELECT id FROM bookings WHERE car_id = $1)", [carId]);
+
+    // 2. Delete bookings
+    await query("DELETE FROM bookings WHERE car_id = $1", [carId]);
+
+    // 3. Delete car availability, maintenance records, documents, views
+    await query("DELETE FROM car_availability WHERE car_id = $1", [carId]);
+    await query("DELETE FROM maintenance_records WHERE car_id = $1", [carId]);
+    await query("DELETE FROM car_documents WHERE car_id = $1", [carId]);
+    await query("DELETE FROM car_views WHERE car_id = $1", [carId]);
+
+    // 4. Delete car images
+    await query("DELETE FROM car_images WHERE car_id = $1", [carId]);
+
+    // 5. Delete the car itself
+    await query("DELETE FROM cars WHERE id = $1 AND owner_id = $2", [carId, access.user.userId]);
+
+    return NextResponse.json({ message: "Car listing and all associated records fully deleted." });
+  } catch (error) {
+    console.error("Failed to fully delete car listing:", error);
+    return NextResponse.json({ error: "Failed to fully delete the car listing from inventory." }, { status: 500 });
+  }
 }
