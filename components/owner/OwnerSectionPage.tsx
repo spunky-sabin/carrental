@@ -9,8 +9,7 @@ type OwnerSection =
   | "bookings"
   | "booking-detail"
   | "earnings"
-  | "reviews"
-  | "notifications";
+  | "reviews";
 
 export default async function OwnerSectionPage({
   section,

@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   AppScreen,
   Icon,
-  appStyles,
 } from "@/components/app/AppUI";
 import type { CarListing, Review, UserProfile } from "@/components/app/types";
 import styles from "./CarDetail.module.css";
@@ -20,24 +19,25 @@ interface CarDetailProps {
     booking_status: string;
     has_review?: boolean;
   }>;
+  initiallyFavorited?: boolean;
 }
 
-export default function CarDetailClient({ car, reviews: initialReviews, profile, userId, userBookings }: CarDetailProps) {
+export default function CarDetailClient({ car, reviews: initialReviews, profile, userId, userBookings, initiallyFavorited = false }: CarDetailProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews);
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [pickupDate, setPickupDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
-  const [pickupLocation, setPickupLocation] = useState(car.location);
-  const [dropoffLocation, setDropoffLocation] = useState(car.location);
   const [bookingStatus, setBookingStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [bookingError, setBookingError] = useState("");
+  const [favorited, setFavorited] = useState(initiallyFavorited);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
 
   // Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentTimeLeft, setPaymentTimeLeft] = useState(300); // 5 minutes
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [paymentMethod, setPaymentMethod] = useState<"esewa" | "paybridge">("esewa");
+  const [paymentMethod, setPaymentMethod] = useState<"esewa" | "sandbox_card">("esewa");
 
   // Review form state
   const [reviewRating, setReviewRating] = useState(5);
@@ -55,8 +55,8 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
   if (pickupDate && returnDate) {
     const pickup = new Date(pickupDate);
     const returnD = new Date(returnDate);
-    if (returnD > pickup) {
-      totalDays = Math.ceil((returnD.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24));
+    if (returnD >= pickup) {
+      totalDays = Math.max(1, Math.ceil((returnD.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
       totalAmount = totalDays * Number(car.price_per_day);
     }
   }
@@ -109,7 +109,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
       return;
     }
     if (totalDays <= 0) {
-      setBookingError("Return date must be after pickup date.");
+      setBookingError("Return date cannot be before pickup date.");
       setBookingStatus("error");
       return;
     }
@@ -125,8 +125,6 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
           carId: car.id,
           pickupDate,
           returnDate,
-          pickupLocation,
-          dropoffLocation,
         }),
       });
 
@@ -201,9 +199,6 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
         console.log("👉 [4/4] Submitting eSewa form to gateway now...");
         document.body.appendChild(form);
         form.submit();
-      } else if (data.checkout_url || data.checkoutUrl) {
-        console.log("👉 [3/4] Redirecting to PayBridge Checkout URL:", data.checkout_url || data.checkoutUrl);
-        window.location.href = data.checkout_url || data.checkoutUrl;
       } else {
         console.log("👉 Payment confirmed internally without external gateway.");
         setShowPaymentModal(false);
@@ -216,7 +211,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
     }
   };
 
-  const handlePaymentCancel = async (isTimeout = false) => {
+  async function handlePaymentCancel(isTimeout = false) {
     if (!currentBookingId) return;
     
     try {
@@ -230,12 +225,37 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
       setBookingStatus("error");
       setBookingError(isTimeout ? "Reservation expired. Please try booking again." : "Payment cancelled.");
     }
-  };
+  }
 
   // --- Review Logic ---
   const completedBookings = userBookings?.filter(b => String(b.booking_status).toUpperCase() === "COMPLETED") || [];
   const unreviewedBooking = completedBookings.find(b => !b.has_review);
   const activeBookings = userBookings?.filter(b => ["PENDING", "PAYMENT_PENDING", "CONFIRMED", "OWNER_ACCEPTED", "READY_FOR_PICKUP", "ACTIVE", "RETURN_PENDING"].includes(String(b.booking_status).toUpperCase())) || [];
+
+  const toggleFavorite = async () => {
+    if (!userId) {
+      setBookingError("Please log in to save this car.");
+      return;
+    }
+
+    setFavoriteBusy(true);
+    try {
+      const res = await fetch("/api/favorites", {
+        method: favorited ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carId: car.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update favorite.");
+      }
+      setFavorited(!favorited);
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : "Failed to update favorite.");
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
 
   const handleReviewSubmit = async () => {
     if (!unreviewedBooking) return;
@@ -330,6 +350,16 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                 <h1 className={styles.carTitle}>{displayName}</h1>
                 <p className={styles.carSubtitle}>{car.year} · {car.location}</p>
               </div>
+              <button
+                type="button"
+                className={styles.favoriteDetailButton}
+                onClick={toggleFavorite}
+                disabled={favoriteBusy}
+                aria-pressed={favorited}
+              >
+                <Icon name="heart" size={18} filled={favorited} />
+                {favorited ? "Saved" : "Save"}
+              </button>
               <div className={styles.ratingBig}>
                 <Icon name="star" size={22} filled />
                 <span className={styles.ratingValue}>
@@ -416,6 +446,13 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                       </div>
                       {review.comment ? (
                         <p className={styles.reviewComment}>{review.comment}</p>
+                      ) : null}
+                      {review.owner_reply ? (
+                        <div className={styles.ownerReply}>
+                          <strong>Owner reply</strong>
+                          <p>{review.owner_reply}</p>
+                          {review.owner_replied_at ? <span>{new Date(review.owner_replied_at).toLocaleDateString()}</span> : null}
+                        </div>
                       ) : null}
                     </div>
                   ))}
@@ -520,22 +557,12 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                   />
                 </div>
                 <div className={styles.bookingField}>
-                  <label>Pickup Location</label>
-                  <input
-                    type="text"
-                    value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
-                    placeholder="Enter pickup location"
-                  />
-                </div>
-                <div className={styles.bookingField}>
-                  <label>Drop-off Location</label>
-                  <input
-                    type="text"
-                    value={dropoffLocation}
-                    onChange={(e) => setDropoffLocation(e.target.value)}
-                    placeholder="Enter drop-off location"
-                  />
+                  <label>Vehicle Location</label>
+                  <div className={styles.locationDisplay}>
+                    <Icon name="location" size={16} />
+                    <span>{car.location}</span>
+                  </div>
+                  <small>Pickup is coordinated with the owner. Return this vehicle to the same location.</small>
                 </div>
               </div>
 
@@ -624,13 +651,13 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
 
               <button
                 type="button"
-                className={`${styles.paymentOptionCard} ${paymentMethod === "paybridge" ? styles.paymentOptionActive : ""}`}
-                onClick={() => setPaymentMethod("paybridge")}
+                className={`${styles.paymentOptionCard} ${paymentMethod === "sandbox_card" ? styles.paymentOptionActive : ""}`}
+                onClick={() => setPaymentMethod("sandbox_card")}
               >
-                <div className={`${styles.paymentOptionBadge} ${styles.paybridgeBadge}`}>PB</div>
+                <div className={`${styles.paymentOptionBadge} ${styles.sandboxCardBadge}`}>TEST</div>
                 <div className={styles.paymentOptionMeta}>
-                  <span className={styles.paymentOptionTitle}>PayBridge</span>
-                  <span className={styles.paymentOptionSubtitle}>PayBridge NP wallet & card checkout</span>
+                  <span className={styles.paymentOptionTitle}>Sandbox Card</span>
+                  <span className={styles.paymentOptionSubtitle}>Instant test payment for development</span>
                 </div>
               </button>
             </div>
@@ -660,7 +687,7 @@ export default function CarDetailClient({ car, reviews: initialReviews, profile,
                   ? "Processing..." 
                   : paymentMethod === "esewa" 
                     ? "Pay with eSewa" 
-                    : "Pay with PayBridge"}
+                    : "Pay with Sandbox Card"}
               </button>
             </div>
           </div>

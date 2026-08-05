@@ -9,7 +9,7 @@ import styles from "@/components/owner/OwnerDashboard.module.css";
 import adminStyles from "./AdminDashboard.module.css";
 import Link from "next/link";
 
-type Filter = "all" | "pending" | "approved" | "rejected";
+type Filter = "all" | "pending" | "approved" | "rejected" | "removed" | "appealed";
 
 export default function AdminCarListingsClient({
   profile,
@@ -36,12 +36,14 @@ export default function AdminCarListingsClient({
     pending: initialListings.filter((c) => (c.approval_status ?? "approved") === "pending").length,
     approved: initialListings.filter((c) => (c.approval_status ?? "approved") === "approved").length,
     rejected: initialListings.filter((c) => (c.approval_status ?? "approved") === "rejected").length,
+    removed: initialListings.filter((c) => (c.approval_status ?? "approved") === "removed").length,
+    appealed: initialListings.filter((c) => (c.approval_status ?? "approved") === "appealed").length,
   };
 
-  const submitAction = async (carId: number, action: "approve" | "reject") => {
+  const submitAction = async (carId: number, action: "approve" | "reject" | "remove") => {
     const reason = rejectionReasons[carId]?.trim() ?? "";
-    if (action === "reject" && !reason) {
-      setError("Please enter a rejection reason before rejecting.");
+    if ((action === "reject" || action === "remove") && !reason) {
+      setError("Please enter a reason before continuing.");
       return;
     }
 
@@ -69,23 +71,23 @@ export default function AdminCarListingsClient({
   function approvalClass(status: string | null) {
     const s = (status ?? "approved").toLowerCase();
     if (s === "approved") return styles.badgeGreen;
-    if (s === "rejected") return styles.badgeRed;
+    if (s === "rejected" || s === "removed") return styles.badgeRed;
     return styles.badgeAmber;
   }
 
   return (
     <AppScreen profile={profile} requireAuth>
-      {/* Lightbox */}
-      {lightboxUrl && (
-        <div className={adminStyles.lightbox} onClick={() => setLightboxUrl(null)} role="dialog" aria-modal>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightboxUrl} alt="Vehicle photo" className={adminStyles.lightboxImg} />
-          <button className={adminStyles.lightboxClose} onClick={() => setLightboxUrl(null)}>✕</button>
-        </div>
-      )}
-
       <div className={styles.ownerPage}>
-        <div className={styles.content}>
+        <div className={`${styles.content} responsive-form-shell`}>
+          {/* Lightbox */}
+          {lightboxUrl && (
+            <div className={adminStyles.lightbox} onClick={() => setLightboxUrl(null)} role="dialog" aria-modal>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={lightboxUrl} alt="Vehicle photo" className={adminStyles.lightboxImg} />
+              <button className={adminStyles.lightboxClose} onClick={() => setLightboxUrl(null)}>✕</button>
+            </div>
+          )}
+
           {/* Header */}
           <header className={styles.hero}>
             <div>
@@ -96,6 +98,8 @@ export default function AdminCarListingsClient({
               </p>
             </div>
             <div className={styles.heroActions}>
+              <Link href="/admin" className={styles.secondaryButton}>Dashboard</Link>
+              <Link href="/admin/users" className={styles.secondaryButton}>Users</Link>
               <Link href="/admin/owner-applications" className={styles.secondaryButton}>Owner Applications</Link>
               <Link href="/home" className={styles.secondaryButton}>Marketplace</Link>
             </div>
@@ -106,7 +110,7 @@ export default function AdminCarListingsClient({
 
           {/* Stats */}
           <div className={styles.grid}>
-            {(["all", "pending", "approved", "rejected"] as Filter[]).map((f) => (
+            {(["all", "pending", "approved", "rejected", "removed", "appealed"] as Filter[]).map((f) => (
               <button
                 key={f}
                 type="button"
@@ -126,7 +130,8 @@ export default function AdminCarListingsClient({
             <div className={adminStyles.carGrid}>
               {filtered.map((car) => {
                 const approvalStatus = (car.approval_status ?? "approved").toLowerCase();
-                const isPending = approvalStatus === "pending";
+                const isPending = approvalStatus === "pending" || approvalStatus === "appealed";
+                const isApproved = approvalStatus === "approved";
 
                 return (
                   <article key={car.id} className={`${adminStyles.carCard} ${isPending ? adminStyles.carCardPending : ""}`}>
@@ -191,7 +196,13 @@ export default function AdminCarListingsClient({
 
                       {car.rejection_reason && (
                         <div className={`${styles.toast} ${styles.toastError}`} style={{ marginTop: 8 }}>
-                          Previous rejection: {car.rejection_reason}
+                          {approvalStatus === "appealed" ? "Suspension Reason" : "Previous rejection"}: {car.rejection_reason}
+                        </div>
+                      )}
+                      
+                      {car.appeal_reason && (
+                        <div className={styles.toast} style={{ marginTop: 8, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' }}>
+                          Appeal Reason: {car.appeal_reason}
                         </div>
                       )}
 
@@ -209,10 +220,10 @@ export default function AdminCarListingsClient({
                         <div className={adminStyles.rejectGroup}>
                           <input
                             className={adminStyles.rejectInput}
-                            placeholder="Rejection reason (required to reject)"
+                            placeholder="Reason required for rejection/removal"
                             value={rejectionReasons[car.id] ?? ""}
                             onChange={(e) => setRejectionReasons({ ...rejectionReasons, [car.id]: e.target.value })}
-                            disabled={!isPending || busyId === car.id}
+                            disabled={(!isPending && !isApproved) || busyId === car.id}
                           />
                           <button
                             type="button"
@@ -222,6 +233,16 @@ export default function AdminCarListingsClient({
                           >
                             ✕ Reject
                           </button>
+                          {isApproved ? (
+                            <button
+                              type="button"
+                              className={styles.dangerButton}
+                              disabled={busyId === car.id}
+                              onClick={() => void submitAction(car.id, "remove")}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>

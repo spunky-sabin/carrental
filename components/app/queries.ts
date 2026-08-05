@@ -43,6 +43,8 @@ type ReviewRow = {
   booking_id: number;
   rating: number;
   comment: string | null;
+  owner_reply: string | null;
+  owner_replied_at: string | null;
   created_at: string;
   renter_name: string;
 };
@@ -156,6 +158,8 @@ export const getCarReviews = cache(async (carId: number): Promise<Review[]> => {
        r.booking_id,
        r.rating,
        r.comment,
+       r.owner_reply,
+       r.owner_replied_at,
        r.created_at,
        COALESCE(u.full_name, u.email) AS renter_name
      FROM reviews r

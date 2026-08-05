@@ -406,7 +406,7 @@ export function DesktopTopNav({ profile }: { profile?: UserProfile | null }) {
   const isOwner = profile?.role === "owner";
   const isAdmin = profile?.role === "admin";
   const ownerItem = isAdmin
-    ? { href: "/admin/owner-applications", label: "Owner Applications", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
+    ? { href: "/admin", label: "Dashboard", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
     : isOwner
       ? { href: "/owner", label: "Owner Dashboard", icon: "briefcase" as IconName, active: pathname.startsWith("/owner") }
       : { href: "/become-a-host", label: "Become an Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") };
@@ -620,7 +620,6 @@ export function DesktopSidebar() {
   const items = [
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" },
     { href: "/messages", label: "Messages", icon: "message" as IconName, active: pathname.startsWith("/messages") },
-    { href: "/notifications", label: "Notifications", icon: "bell" as IconName, active: pathname.startsWith("/notifications") },
   ];
 
   return (
@@ -745,10 +744,8 @@ export function UserAvatar({
 
 export function AppHeader({
   profile,
-  onNotification,
 }: {
   profile?: UserProfile | null;
-  onNotification?: () => void;
 }) {
   return (
     <header className={styles.topBar}>
@@ -756,9 +753,6 @@ export function AppHeader({
       <div className={styles.headerActions}>
         {profile ? (
           <>
-            <button type="button" className={styles.roundButton} onClick={onNotification} aria-label="Notifications">
-              <Icon name="bell" />
-            </button>
             <Link href="/profile" aria-label="Open profile">
               <UserAvatar profile={profile} />
             </Link>
@@ -779,10 +773,10 @@ export function BottomNavigation({ profile }: { profile?: UserProfile | null }) 
   const isOwner = profile?.role === "owner";
   const isAdmin = profile?.role === "admin";
   const ownerItem = isAdmin
-    ? { href: "/admin/owner-applications", label: "Admin", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
+    ? { href: "/admin", label: "Dashboard", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
     : isOwner
       ? { href: "/owner", label: "Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/owner") }
-      : { href: "/become-a-host", label: "Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/become-a-host") };
+      : { href: "/bookings", label: "Bookings", icon: "clock" as IconName, active: pathname.startsWith("/bookings") };
   const items = [
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" || pathname === "/" },
     { href: "/browse", label: "Browse", icon: "car" as IconName, active: pathname.startsWith("/browse") },

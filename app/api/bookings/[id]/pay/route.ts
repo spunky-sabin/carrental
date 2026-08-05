@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { addNotification, ensureOwnerSchema, normalizeBookingStatus } from "@/lib/owner";
-import { getPayBridgeClient } from "@/lib/paybridge";
 import { buildEsewaPayload } from "@/lib/esewa";
 
 export async function POST(
@@ -75,16 +74,7 @@ export async function POST(
       return NextResponse.json({ error: "Reservation time expired. Booking cancelled." }, { status: 400 });
     }
 
-    // Fetch user info for PayBridge customer details
-    const userResult = await query<{
-      full_name: string | null;
-      email: string;
-      phone: string | null;
-    }>("SELECT full_name, email, phone FROM users WHERE id = $1", [session.userId]);
-    const user = userResult.rows[0];
-
     const amountInNpr = Number(booking.total_amount);
-    const amountInPaisa = Math.round(amountInNpr * 100);
 
     const reqUrl = new URL(request.url);
     const origin = request.headers.get("origin") || `${reqUrl.protocol}//${reqUrl.host}`;
@@ -99,7 +89,6 @@ export async function POST(
       // Body may be empty
     }
 
-    // Handle eSewa Payment Provider
     if (paymentMethod === "esewa") {
       const esewaPayload = buildEsewaPayload({
         bookingId,
@@ -115,44 +104,14 @@ export async function POST(
       });
     }
 
-    // Handle PayBridge Payment Provider
-    try {
-      const client = getPayBridgeClient();
-
-      const sessionResponse = await client.checkout.create({
-        amount: amountInPaisa,
-        currency: "NPR",
-        customer: {
-          name: user?.full_name || "Customer",
-          email: user?.email || "customer@example.com",
-          phone: user?.phone || undefined,
-        },
-        metadata: {
-          booking_id: String(bookingId),
-          order_id: `ORD_${bookingId}`,
-        },
-        returnUrl: `${origin}/api/payments/callback?booking_id=${bookingId}&car_id=${booking.car_id}`,
-        cancelUrl: `${origin}/api/payments/cancel?booking_id=${bookingId}&car_id=${booking.car_id}`,
-      });
-
-      return NextResponse.json({
-        success: true,
-        provider: "paybridge",
-        checkout_url: sessionResponse.checkout_url,
-        checkoutUrl: sessionResponse.checkout_url,
-        session_id: sessionResponse.id,
-      });
-    } catch (sdkError: any) {
-      console.error("PayBridge SDK Error:", sdkError);
-
-      // Fallback to internal confirmation if SDK call fails
+    if (paymentMethod === "sandbox_card") {
       const pmResult = await query<{ id: number }>("SELECT id FROM payment_methods WHERE user_id = $1 LIMIT 1", [session.userId]);
       let pmId = 1;
       if (pmResult.rows.length > 0) {
         pmId = pmResult.rows[0].id;
       } else {
         const newPm = await query<{ id: number }>(
-          "INSERT INTO payment_methods (name, user_id, provider, is_default, is_active) VALUES ('PayBridge Wallet', $1, 'paybridge', true, true) RETURNING id",
+          "INSERT INTO payment_methods (name, user_id, provider, is_default, is_active) VALUES ('Sandbox Card', $1, 'sandbox_card', true, true) RETURNING id",
           [session.userId]
         );
         pmId = newPm.rows[0].id;
@@ -161,15 +120,17 @@ export async function POST(
       await query(
         `INSERT INTO payments (booking_id, payment_method_id, amount, payment_status, paid_at, transaction_reference)
          VALUES ($1, $2, $3, 'paid', NOW(), $4)`,
-        [bookingId, pmId, amountInNpr, `PAYBRIDGE_FALLBACK_${Date.now()}`]
+        [bookingId, pmId, amountInNpr, `SANDBOX_CARD_${Date.now()}`]
       );
 
       await query("UPDATE bookings SET booking_status = 'CONFIRMED' WHERE id = $1", [bookingId]);
       await addNotification(booking.owner_id, "New booking request", `${booking.brand} ${booking.model} has a paid booking request awaiting your acceptance.`, "Booking Request");
       await addNotification(session.userId, "Payment received", "Your payment was received. The owner will now review your booking request.", "Payment Received");
 
-      return NextResponse.json({ success: true, provider: "paybridge_fallback", message: "Payment confirmed. Booking sent to owner for acceptance." }, { status: 200 });
+      return NextResponse.json({ success: true, provider: "sandbox_card", message: "Sandbox card payment confirmed. Booking sent to owner for acceptance." }, { status: 200 });
     }
+
+    return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
 
   } catch (error) {
     console.error("Payment confirmation error:", error);

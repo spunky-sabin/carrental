@@ -1,5 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { PlaceholderScreen } from "@/components/app/AppUI";
+import { AppScreen, CarsScroller, PlaceholderScreen } from "@/components/app/AppUI";
+import { getCars } from "@/components/app/queries";
+import { query } from "@/lib/db";
+import { ensureOwnerSchema } from "@/lib/owner";
 import { getAuthenticatedProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +10,7 @@ export const dynamic = "force-dynamic";
 const profileSections = {
   "favorite-cars": {
     title: "Favorite Cars",
-    description: "Saved cars will appear here once favorites are connected to the database.",
+    description: "Cars you saved for quick access.",
     icon: "heart",
   },
   "previous-rent": {
@@ -68,6 +71,28 @@ export default async function ProfileSectionPage({
 
   if (!content) {
     notFound();
+  }
+
+  if (section === "favorite-cars") {
+    await ensureOwnerSchema();
+    const favoritesResult = await query<{ car_id: number }>(
+      "SELECT car_id FROM favorites WHERE user_id = $1 ORDER BY created_at DESC",
+      [result.profile.id]
+    );
+    const favoriteIds = new Set(favoritesResult.rows.map((row) => row.car_id));
+    const cars = (await getCars()).filter((car) => favoriteIds.has(car.id));
+
+    return (
+      <AppScreen profile={result.profile} requireAuth>
+        <div className="responsive-form-shell">
+          <div className="responsive-form-card">
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>{content.title}</h1>
+            <p style={{ margin: "8px 0 22px", color: "#64748b", fontWeight: 700 }}>{content.description}</p>
+            {cars.length > 0 ? <CarsScroller cars={cars} /> : <p style={{ color: "#64748b", fontWeight: 700 }}>No saved cars yet.</p>}
+          </div>
+        </div>
+      </AppScreen>
+    );
   }
 
   return (

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { carId, pickupDate, returnDate, pickupLocation, dropoffLocation } = body;
+    const { carId, pickupDate, returnDate } = body;
 
     if (!carId || !pickupDate || !returnDate) {
       return NextResponse.json({ error: "Car ID, pickup date, and return date are required" }, { status: 400 });
@@ -20,15 +20,15 @@ export async function POST(request: Request) {
 
     const pickup = new Date(pickupDate);
     const returnD = new Date(returnDate);
-    if (returnD <= pickup) {
-      return NextResponse.json({ error: "Return date must be after pickup date" }, { status: 400 });
+    if (returnD < pickup) {
+      return NextResponse.json({ error: "Return date cannot be before pickup date" }, { status: 400 });
     }
 
-    const totalDays = Math.ceil((returnD.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24));
+    const totalDays = Math.max(1, Math.ceil((returnD.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Get car price, status, and approval — all must pass for booking to proceed
-    const carResult = await query<{ price_per_day: string; status: string; owner_id: number; minimum_rental_days: number | null; maximum_rental_days: number | null; approval_status: string | null }>(
-      "SELECT price_per_day, status, owner_id, minimum_rental_days, maximum_rental_days, approval_status FROM cars WHERE id = $1 AND is_active = true FOR UPDATE",
+    const carResult = await query<{ price_per_day: string; status: string; owner_id: number; location: string; minimum_rental_days: number | null; maximum_rental_days: number | null; approval_status: string | null }>(
+      "SELECT price_per_day, status, owner_id, location, minimum_rental_days, maximum_rental_days, approval_status FROM cars WHERE id = $1 AND is_active = true FOR UPDATE",
       [carId]
     );
 
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PAYMENT_PENDING', NOW() + INTERVAL '5 minutes', NOW() + INTERVAL '5 minutes')
        RETURNING *`,
-      [carId, session.userId, pickupDate, returnDate, pickupLocation || null, dropoffLocation || null, totalDays, totalAmount]
+      [carId, session.userId, pickupDate, returnDate, car.location, car.location, totalDays, totalAmount]
     );
 
     // Mark car as booked

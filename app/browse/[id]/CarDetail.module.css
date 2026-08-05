@@ -320,6 +320,48 @@
   font-weight: 500;
 }
 
+.ownerReply {
+  margin-top: 12px;
+  border-left: 3px solid #eea85e;
+  background: #fffbeb;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.ownerReply strong {
+  display: block;
+  color: #92400e;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.ownerReply p {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.ownerReply span {
+  display: block;
+  margin-top: 6px;
+  color: #78716c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.favoriteDetailButton {
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff5f5;
+  color: #dc2626;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .noReviews {
   text-align: center;
   padding: 40px 20px;
@@ -799,9 +841,22 @@
   color: #ffffff;
 }
 
-.paybridgeBadge {
-  background: #4f46e5;
+.sandboxCardBadge {
+  background: #0f172a;
   color: #ffffff;
+}
+
+.locationDisplay {
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
 }
 
 .paymentOptionMeta {

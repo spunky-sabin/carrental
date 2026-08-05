@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { ensureOwnerSchema } from "@/lib/owner";
 
 export async function POST(request: Request) {
   try {
@@ -78,6 +79,8 @@ export async function GET(request: Request) {
          r.booking_id,
          r.rating,
          r.comment,
+         r.owner_reply,
+         r.owner_replied_at,
          r.created_at,
          COALESCE(u.full_name, u.email) AS renter_name
        FROM reviews r
@@ -94,3 +97,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 });
   }
 }
+    await ensureOwnerSchema();

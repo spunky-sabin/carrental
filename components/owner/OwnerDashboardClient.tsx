@@ -21,8 +21,7 @@ type OwnerSection =
   | "bookings"
   | "booking-detail"
   | "earnings"
-  | "reviews"
-  | "notifications";
+  | "reviews";
 
 type FuelLevel = "Empty" | "1/4" | "1/2" | "3/4" | "Full";
 
@@ -62,7 +61,6 @@ const ownerNav: Array<{ section: OwnerSection; href: string; label: string; icon
   { section: "cars", href: "/owner/cars", label: "Manage Cars", icon: "car" },
   { section: "bookings", href: "/owner/bookings", label: "Bookings", icon: "clock" },
   { section: "earnings", href: "/owner/earnings", label: "Earnings", icon: "briefcase" },
-  { section: "notifications", href: "/owner/notifications", label: "Notifications", icon: "bell" },
   { section: "reviews", href: "/owner/reviews", label: "Reviews", icon: "star" },
 ];
 
@@ -107,7 +105,7 @@ function statusClass(status: string) {
   const normalized = normalizeStatus(status);
   if (["COMPLETED", "OWNER_ACCEPTED", "READY_FOR_PICKUP", "ACTIVE"].includes(normalized)) return styles.badgeGreen;
   if (["CANCELLED", "REJECTED", "EXPIRED"].includes(normalized)) return styles.badgeRed;
-  if (["RETURN_PENDING", "PAYMENT_PENDING"].includes(normalized)) return styles.badgeAmber;
+  if (["RETURN_PENDING", "PAYMENT_PENDING", "HANDOVER_PENDING"].includes(normalized)) return styles.badgeAmber;
   return styles.badgeBlue;
 }
 
@@ -166,6 +164,8 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const CARS_PER_PAGE = 8;
+  const [appealCarId, setAppealCarId] = useState<number | null>(null);
+  const [appealReason, setAppealReason] = useState("");
 
   const api = async (url: string, init: RequestInit) => {
     setBusy(true);
@@ -218,8 +218,6 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
         return renderEarnings();
       case "reviews":
         return renderReviews();
-      case "notifications":
-        return renderNotifications();
       default:
         return renderDashboard();
     }
@@ -233,13 +231,12 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
 
   function sectionDescription() {
     const descriptions: Record<OwnerSection, string> = {
-      dashboard: "Monitor fleet health, bookings, returns, earnings, ratings, and recent notifications.",
+      dashboard: "Monitor fleet health, bookings, returns, earnings, and ratings.",
       cars: "Manage listings, listing visibility, and vehicle images.",
       bookings: "Move reservations through acceptance, pickup, active rental, return, and completion.",
       "booking-detail": "Review customer, vehicle, payment, rental timeline, notes, pickup, and return data.",
       earnings: "Track revenue across today, week, month, year, lifetime, and recent payment history.",
       reviews: "Read customer feedback and filter ratings across your fleet.",
-      notifications: "Review owner alerts for bookings, returns, payments, reviews, and documents.",
     };
 
     return descriptions[section];
@@ -330,14 +327,30 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
     }
   }
 
-  function handleCarStatus(carId: number, action: "hide" | "reactivate" | "delete" | "resubmit") {
+  function handleCarStatus(carId: number, action: "hide" | "reactivate" | "delete" | "resubmit" | "appeal") {
     if (action === "delete" && !window.confirm("Delete this listing? This cannot be undone.")) return;
     if (action === "resubmit" && !window.confirm("Resubmit this listing for admin review?")) return;
+
+    if (action === "appeal") {
+      setAppealCarId(carId);
+      setAppealReason("");
+      return;
+    }
 
     void api(`/api/owner/cars/${carId}`, {
       method: action === "delete" ? "DELETE" : "PATCH",
       body: action === "delete" ? undefined : JSON.stringify({ action }),
     });
+  }
+
+  function submitAppeal() {
+    if (!appealCarId || !appealReason.trim()) return;
+    void api(`/api/owner/cars/${appealCarId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "appeal", appeal_reason: appealReason.trim() }),
+    });
+    setAppealCarId(null);
+    setAppealReason("");
   }
 
   function handleBookingAction(booking: OwnerDashboardBooking, action: string, body: Record<string, unknown> = {}) {
@@ -364,23 +377,6 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
         </div>
 
         <div className={styles.twoGrid}>
-          <section className={styles.panel}>
-            <PanelHeader title="Recent Notifications" text="Latest owner alerts and operational events." />
-            {data.notifications.length > 0 ? (
-              <div className={styles.list}>
-                {data.notifications.slice(0, 6).map((notification) => (
-                  <div key={notification.id} className={styles.listItem}>
-                    <div>
-                      <span className={styles.strong}>{notification.title}</span>
-                      <span className={styles.muted}>{notification.message}</span>
-                    </div>
-                    <span className={styles.badge}>{notification.notification_type || "notice"}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <EmptyState text="No notifications yet." />}
-          </section>
-
           <section className={styles.panel}>
             <PanelHeader title="Upcoming Returns" text="Vehicles that need inspection or return follow-up." />
             {data.bookings.filter((booking) => ["ACTIVE", "RETURN_PENDING"].includes(normalizeStatus(booking.booking_status))).length > 0 ? (
@@ -471,6 +467,8 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
                 const approvalStatus = (car.approval_status ?? "approved").toLowerCase();
                 const isRejected = approvalStatus === "rejected";
                 const isPending = approvalStatus === "pending";
+                const isRemoved = approvalStatus === "removed";
+                const isAppealed = approvalStatus === "appealed";
                 const isActive = car.is_active;
 
                 return (
@@ -529,6 +527,16 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
                           Rejected: {car.rejection_reason}
                         </div>
                       )}
+                      {isRemoved && car.rejection_reason && (
+                        <div className={styles.rejectionNotice} style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b' }}>
+                          Suspended: {car.rejection_reason}
+                        </div>
+                      )}
+                      {isAppealed && (
+                        <div className={styles.pendingNotice} style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' }}>
+                          Appeal Pending Admin Review
+                        </div>
+                      )}
                       {isPending && (
                         <div className={styles.pendingNotice}>
                           Pending Admin Review
@@ -549,12 +557,30 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
                           Edit
                         </button>
                         
-                        <button 
-                          className={styles.tinyButton} 
-                          onClick={() => handleCarStatus(car.id, isActive ? "hide" : "reactivate")}
-                        >
-                          {isActive ? "Deactivate" : "Activate"}
-                        </button>
+                        {isRemoved ? (
+                          <button 
+                            className={styles.tinyButton} 
+                            onClick={() => handleCarStatus(car.id, "appeal")}
+                            style={{ backgroundColor: '#2563eb', color: '#fff' }}
+                          >
+                            Appeal Suspension
+                          </button>
+                        ) : isAppealed ? (
+                          <button 
+                            className={styles.tinyButton} 
+                            disabled
+                            style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                          >
+                            Appeal Submitted
+                          </button>
+                        ) : (
+                          <button 
+                            className={styles.tinyButton} 
+                            onClick={() => handleCarStatus(car.id, isActive ? "hide" : "reactivate")}
+                          >
+                            {isActive ? "Deactivate" : "Activate"}
+                          </button>
+                        )}
 
                         {isRejected && (
                           <button 
@@ -822,29 +848,22 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
             text="Filter customer feedback by rating."
             action={<select className={styles.secondaryButton} value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value)}><option value="all">All ratings</option>{[5, 4, 3, 2, 1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}</select>}
           />
-          <ReviewList reviews={filteredReviews} />
+          <ReviewList reviews={filteredReviews} onReply={handleReviewReply} />
         </section>
       </>
     );
   }
 
-  function renderNotifications() {
-    return (
-      <section className={styles.panel}>
-        <PanelHeader title="Owner Notifications" text="Booking Request, Booking Accepted, Booking Cancelled, Vehicle Return Due, Vehicle Returned, Payment Received, and Review Received alerts." />
-        {data.notifications.length > 0 ? (
-          <div className={styles.list}>
-            {data.notifications.map((notification) => (
-              <div key={notification.id} className={styles.listItem}>
-                <div><span className={styles.strong}>{notification.title}</span><span className={styles.muted}>{notification.message} · {formatDate(notification.created_at)}</span></div>
-                <span className={`${styles.badge} ${notification.is_read ? "" : styles.badgeBlue}`}>{notification.notification_type || "notice"}</span>
-              </div>
-            ))}
-          </div>
-        ) : <EmptyState text="No notifications yet." />}
-      </section>
-    );
+  function handleReviewReply(reviewId: number, reply: string) {
+    void api(`/api/owner/reviews/${reviewId}/reply`, {
+      method: "PATCH",
+      body: JSON.stringify({ reply }),
+    });
   }
+
+  
+  
+  
 
 
 
@@ -919,6 +938,91 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
           </main>
         </div>
       </div>
+
+      {/* Appeal Suspension Modal */}
+      {appealCarId !== null && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0, 0, 0, 0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setAppealCarId(null); setAppealReason(""); } }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "20px",
+              padding: "32px",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 24px 64px rgba(0, 0, 0, 0.18)",
+            }}
+          >
+            <div style={{ marginBottom: "24px" }}>
+              <h2 style={{ fontSize: "20px", fontWeight: 800, color: "#0f172a", margin: "0 0 8px" }}>
+                Appeal Car Suspension
+              </h2>
+              <p style={{ fontSize: "14px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+                Explain why you believe the suspension should be lifted. The admin will review your appeal and respond with a notification.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 700, color: "#374151", display: "block", marginBottom: "8px" }}>
+                Appeal Reason <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                rows={5}
+                placeholder="Describe why this suspension should be reconsidered..."
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  border: "1.5px solid #e2e8f0", borderRadius: "12px",
+                  padding: "12px 14px", fontSize: "14px", color: "#0f172a",
+                  resize: "vertical", fontFamily: "inherit", lineHeight: 1.6,
+                  outline: "none", transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#2563eb"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => { setAppealCarId(null); setAppealReason(""); }}
+                style={{
+                  padding: "10px 20px", borderRadius: "10px",
+                  border: "1.5px solid #e2e8f0", background: "#fff",
+                  color: "#374151", fontWeight: 700, fontSize: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitAppeal}
+                disabled={!appealReason.trim() || busy}
+                style={{
+                  padding: "10px 24px", borderRadius: "10px",
+                  border: "none", background: appealReason.trim() ? "#2563eb" : "#93c5fd",
+                  color: "#fff", fontWeight: 700, fontSize: "14px",
+                  cursor: appealReason.trim() && !busy ? "pointer" : "not-allowed",
+                  transition: "background 0.15s",
+                }}
+              >
+                {busy ? "Submitting…" : "Submit Appeal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppScreen>
   );
 }
@@ -957,18 +1061,21 @@ function BookingActions({ booking, onAction, detail = false }: { booking: OwnerD
   return (
     <div className={styles.actionRow}>
       <Link className={styles.tinyButton} href={`/owner/bookings/${booking.id}`}>View</Link>
-      <a className={styles.tinyButton} href={`mailto:${booking.renter_email}`}>Message Customer</a>
       {status === "CONFIRMED" ? <button className={styles.tinyButton} onClick={() => onAction(booking, "accept")}>Accept Booking</button> : null}
       {status === "CONFIRMED" ? <button className={styles.dangerButton} onClick={() => onAction(booking, "reject", { cancellation_reason: rejectionReason || "Rejected by owner" })}>Reject Booking</button> : null}
       {status === "OWNER_ACCEPTED" ? <button className={styles.tinyButton} onClick={() => onAction(booking, "ready_for_pickup")}>Mark Ready for Pickup</button> : null}
       {status === "READY_FOR_PICKUP" || status === "OWNER_ACCEPTED" ? (
         <button className={styles.tinyButton} onClick={() => onAction(booking, "hand_over", { pickup_odometer: Number(pickupOdometer || 0), pickup_fuel_level: pickupFuel })}>Hand Over Vehicle</button>
       ) : null}
-      {status === "ACTIVE" || status === "RETURN_PENDING" ? (
-        <button className={styles.tinyButton} onClick={() => onAction(booking, "receive_vehicle", { return_odometer: Number(returnOdometer || 0), return_fuel_level: returnFuel, damage_notes: damageNotes })}>Receive Vehicle</button>
+      {["ACTIVE", "RETURN_REQUESTED", "RETURN_PENDING"].includes(status) ? (
+        <button
+          className={styles.tinyButton}
+          disabled={status === "ACTIVE"}
+          style={status === "ACTIVE" ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+          title={status === "ACTIVE" ? "Waiting for user to signal return" : undefined}
+          onClick={() => status !== "ACTIVE" && onAction(booking, "receive_vehicle", { return_odometer: Number(returnOdometer || 0), return_fuel_level: returnFuel })}
+        >Receive Vehicle</button>
       ) : null}
-      {status === "RETURN_PENDING" ? <button className={styles.tinyButton} onClick={() => onAction(booking, "complete")}>Complete Booking</button> : null}
-      {["ACTIVE", "RETURN_PENDING", "COMPLETED"].includes(status) ? <button className={styles.dangerButton} onClick={() => onAction(booking, "report_damage", { damage_notes: damageNotes || "Damage reported by owner" })}>Report Damage</button> : null}
       {detail ? (
         <div className={styles.formGrid} style={{ width: "100%", marginTop: 12 }}>
           {status === "CONFIRMED" ? <Field label="Reject Reason" full><textarea value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} /></Field> : null}
@@ -978,11 +1085,10 @@ function BookingActions({ booking, onAction, detail = false }: { booking: OwnerD
               <Field label="Pickup Fuel"><select value={pickupFuel} onChange={(e) => setPickupFuel(e.target.value as FuelLevel)}>{["Empty", "1/4", "1/2", "3/4", "Full"].map((value) => <option key={value}>{value}</option>)}</select></Field>
             </>
           ) : null}
-          {status === "ACTIVE" || status === "RETURN_PENDING" ? (
+          {status === "ACTIVE" || status === "RETURN_REQUESTED" || status === "RETURN_PENDING" ? (
             <>
               <Field label="Return Odometer"><input type="number" value={returnOdometer} onChange={(e) => setReturnOdometer(e.target.value)} /></Field>
               <Field label="Return Fuel"><select value={returnFuel} onChange={(e) => setReturnFuel(e.target.value as FuelLevel)}>{["Empty", "1/4", "1/2", "3/4", "Full"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-              <Field label="Damage Notes" full><textarea value={damageNotes} onChange={(e) => setDamageNotes(e.target.value)} /></Field>
             </>
           ) : null}
           <Field label="Owner Notes" full><textarea value={ownerNotes} onChange={(e) => setOwnerNotes(e.target.value)} /></Field>
@@ -1006,17 +1112,38 @@ function PaymentTable({ payments }: { payments: OwnerDashboardData["payments"] }
   );
 }
 
-function ReviewList({ reviews }: { reviews: OwnerDashboardReview[] }) {
+function ReviewList({ reviews, onReply }: { reviews: OwnerDashboardReview[]; onReply: (reviewId: number, reply: string) => void }) {
   return reviews.length > 0 ? (
     <div className={styles.list}>
       {reviews.map((review) => (
-        <div key={review.id} className={styles.listItem}>
-          <div><span className={styles.strong}>{review.renter_name} · {review.brand} {review.model}</span><span className={styles.muted}>{review.comment || "No comment"} · {formatDate(review.created_at)}</span></div>
-          <span className={`${styles.badge} ${styles.badgeBlue}`}>{review.rating} stars</span>
-        </div>
+        <ReviewItem key={review.id} review={review} onReply={onReply} />
       ))}
     </div>
   ) : <EmptyState text="No reviews match this filter." />;
 }
 
+function ReviewItem({ review, onReply }: { review: OwnerDashboardReview; onReply: (reviewId: number, reply: string) => void }) {
+  const [reply, setReply] = useState(review.owner_reply || "");
 
+  return (
+    <div className={styles.listItem}>
+      <div>
+        <span className={styles.strong}>{review.renter_name} · {review.brand} {review.model}</span>
+        <span className={styles.muted}>{review.comment || "No comment"} · {formatDate(review.created_at)}</span>
+        {review.owner_reply ? <span className={styles.muted}>Owner reply: {review.owner_reply}</span> : null}
+        <div className={styles.actionRow} style={{ marginTop: 8 }}>
+          <input
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Write an owner reply"
+            style={{ minHeight: 38, border: "1px solid var(--owner-border)", borderRadius: 12, padding: "0 12px", minWidth: 240 }}
+          />
+          <button className={styles.tinyButton} onClick={() => onReply(review.id, reply)}>
+            {review.owner_reply ? "Update Reply" : "Reply"}
+          </button>
+        </div>
+      </div>
+      <span className={`${styles.badge} ${styles.badgeBlue}`}>{review.rating} stars</span>
+    </div>
+  );
+}

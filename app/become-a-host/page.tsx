@@ -191,7 +191,7 @@ export default function BecomeOwnerPage() {
   return (
     <AppScreen profile={profile}>
       <div className={styles.ownerPage}>
-        <div className={styles.content}>
+        <div className={`${styles.content} responsive-form-shell`}>
           <header className={styles.hero}>
             <div>
               <p className={styles.eyebrow}>Owner application</p>

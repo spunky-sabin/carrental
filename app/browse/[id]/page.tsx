@@ -38,6 +38,12 @@ export default async function CarDetailPage({ params }: { params: Promise<{ id: 
   }
 
   const userBookings = userId ? await getUserBookingsForCar(userId, carId) : [];
+  const favoriteResult = userId
+    ? await query<{ exists: boolean }>(
+        "SELECT EXISTS (SELECT 1 FROM favorites WHERE user_id = $1 AND car_id = $2) AS exists",
+        [userId, carId]
+      ).catch(() => ({ rows: [{ exists: false }] }))
+    : { rows: [{ exists: false }] };
 
   return (
     <CarDetailClient
@@ -46,6 +52,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ id: 
       profile={result?.profile || null}
       userId={userId}
       userBookings={userBookings as Array<{ id: number; booking_status: string; has_review?: boolean }>}
+      initiallyFavorited={Boolean(favoriteResult.rows[0]?.exists)}
     />
   );
 }

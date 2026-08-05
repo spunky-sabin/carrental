@@ -16,8 +16,7 @@ const menuItems = [
   { label: "General", href: "/profile", icon: "user" },
   { label: "Favorite Cars", href: "/profile/favorite-cars", icon: "heart" },
   { label: "Previous Rent", href: "/profile/previous-rent", icon: "clock" },
-  { label: "Notifications", href: "/notifications", icon: "bell" },
-  { label: "Connected Partnerships", href: "/profile/connected-partnerships", icon: "briefcase" },
+  { label: "Become an Owner", href: "/become-a-host", icon: "briefcase" },
   { label: "Support", href: "/profile/support", icon: "support" },
   { label: "Settings", href: "/profile/settings", icon: "settings" },
   { label: "Languages", href: "/profile/languages", icon: "language" },
@@ -62,42 +61,44 @@ export default function ProfileScreen({
 
   return (
     <AppScreen profile={profile} requireAuth={true}>
-      <div className={appStyles.pageTitleRow}>
-        <BrandLogo />
-        <Link href="/profile/edit" className={appStyles.primaryPill}>
-          <Icon name="edit" size={18} />
-          Edit
-        </Link>
-      </div>
-
-      {successMessage ? <div className={appStyles.success}>{successMessage}</div> : null}
-      {logoutError ? <div className={appStyles.alert}>{logoutError}</div> : null}
-
-      <section className={appStyles.profileHero}>
-        <UserAvatar profile={profile} size="large" />
-        <h1 className={appStyles.profileName}>{profile.fullName}</h1>
-        <p className={appStyles.profileEmail}>{profile.email}</p>
-      </section>
-
-      <nav className={appStyles.menuList} aria-label="Profile menu">
-        {menuItems.map((item) => (
-          <Link key={item.label} href={item.href} className={appStyles.menuItem}>
-            <span className={appStyles.menuIcon}>
-              <Icon name={item.icon} size={20} />
-            </span>
-            <span className={appStyles.menuLabel}>{item.label}</span>
-            <Icon name="chevron" size={19} />
+      <div className="responsive-form-shell">
+        <div className={appStyles.pageTitleRow}>
+          <BrandLogo />
+          <Link href="/profile/edit" className={appStyles.primaryPill}>
+            <Icon name="edit" size={18} />
+            Edit
           </Link>
-        ))}
+        </div>
 
-        <button type="button" className={appStyles.menuItem} onClick={() => setLogoutOpen(true)}>
-          <span className={appStyles.menuIcon}>
-            <Icon name="logout" size={20} />
-          </span>
-          <span className={appStyles.menuLabel}>Logout</span>
-          <Icon name="chevron" size={19} />
-        </button>
-      </nav>
+        {successMessage ? <div className={appStyles.success}>{successMessage}</div> : null}
+        {logoutError ? <div className={appStyles.alert}>{logoutError}</div> : null}
+
+        <section className={appStyles.profileHero}>
+          <UserAvatar profile={profile} size="large" />
+          <h1 className={appStyles.profileName}>{profile.fullName}</h1>
+          <p className={appStyles.profileEmail}>{profile.email}</p>
+        </section>
+
+        <nav className={appStyles.menuList} aria-label="Profile menu">
+          {menuItems.map((item) => (
+            <Link key={item.label} href={item.href} className={appStyles.menuItem}>
+              <span className={appStyles.menuIcon}>
+                <Icon name={item.icon} size={20} />
+              </span>
+              <span className={appStyles.menuLabel}>{item.label}</span>
+              <Icon name="chevron" size={19} />
+            </Link>
+          ))}
+
+          <button type="button" className={appStyles.menuItem} onClick={() => setLogoutOpen(true)}>
+            <span className={appStyles.menuIcon}>
+              <Icon name="logout" size={20} />
+            </span>
+            <span className={appStyles.menuLabel}>Logout</span>
+            <Icon name="chevron" size={19} />
+          </button>
+        </nav>
+      </div>
 
       {logoutOpen ? (
         <Modal

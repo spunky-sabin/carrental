@@ -30,3 +30,18 @@ button,
 input {
   font: inherit;
 }
+
+.responsive-form-shell {
+  width: min(100%, 960px);
+  margin: 0 auto;
+}
+
+.responsive-form-card {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .responsive-form-shell {
+    width: min(100%, 880px);
+  }
+}

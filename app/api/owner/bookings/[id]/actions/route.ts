@@ -94,16 +94,14 @@ export async function POST(
 
     await query(
       `UPDATE bookings
-       SET booking_status = 'ACTIVE',
-           pickup_confirmed_at = NOW(),
+       SET booking_status = 'HANDOVER_PENDING',
            pickup_odometer = $2,
            pickup_fuel_level = $3
        WHERE id = $1`,
       [bookingId, Number(body.pickup_odometer || 0), String(body.pickup_fuel_level || "Full")]
     );
-    await query("UPDATE cars SET status = 'booked' WHERE id = $1", [booking.car_id]);
-    await addNotification(booking.renter_id, "Vehicle handed over", `${booking.brand} ${booking.model} rental is now active.`, "Booking Accepted");
-    return NextResponse.json({ message: "Vehicle handed over and rental activated." });
+    await addNotification(booking.renter_id, "Vehicle handover initiated", `${booking.brand} ${booking.model} has been handed over by the owner. Please accept the handover in your bookings dashboard.`, "Booking Accepted");
+    return NextResponse.json({ message: "Handover initiated. Waiting for user to accept." });
   }
 
   if (action === "receive_vehicle" || action === "complete") {

@@ -87,6 +87,7 @@ export default async function MyBookingsPage() {
      JOIN users u ON c.owner_id = u.id
      LEFT JOIN payments p ON p.booking_id = b.id
      WHERE b.renter_id = $1
+       AND UPPER(b.booking_status) NOT IN ('CANCELLED', 'EXPIRED')
      ORDER BY b.created_at DESC`,
     [result.profile.id]
   );

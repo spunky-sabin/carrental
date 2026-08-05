@@ -29,8 +29,33 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   if (body.action === "reactivate") {
+    if (String(car.approval_status || "").toLowerCase() === "removed") {
+      return NextResponse.json({ error: "Cannot activate a suspended listing. Please appeal the suspension instead." }, { status: 400 });
+    }
     await query("UPDATE cars SET is_active = true, status = 'available' WHERE id = $1 AND owner_id = $2", [carId, access.user.userId]);
     return NextResponse.json({ message: "Listing reactivated." });
+  }
+
+  if (body.action === "appeal") {
+    if (String(car.approval_status || "").toLowerCase() !== "removed") {
+      return NextResponse.json({ error: "You can only appeal a suspended listing." }, { status: 400 });
+    }
+    if (!body.appeal_reason?.trim()) {
+      return NextResponse.json({ error: "Appeal reason is required." }, { status: 400 });
+    }
+    await query(
+      `UPDATE cars 
+       SET approval_status = 'appealed', 
+           appeal_reason = $1, 
+           submitted_at = NOW() 
+       WHERE id = $2 AND owner_id = $3`,
+      [body.appeal_reason.trim(), carId, access.user.userId]
+    );
+
+    // Send notifications to all admin users
+    const admins = await query<{ id: number }>("SELECT id FROM users WHERE role = 'admin'");
+
+    return NextResponse.json({ message: "Appeal submitted successfully." });
   }
 
   if (body.action === "resubmit") {

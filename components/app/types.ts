@@ -74,6 +74,8 @@ export type Review = {
   booking_id: number;
   rating: number;
   comment: string | null;
+  owner_reply?: string | null;
+  owner_replied_at?: string | null;
   created_at: string;
   renter_name: string;
 };

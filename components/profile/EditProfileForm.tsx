@@ -117,15 +117,16 @@ export default function EditProfileForm({ profile }: { profile: UserProfile }) {
 
   return (
     <AppScreen withNav={false} profile={profile} requireAuth={true}>
-      <div className={appStyles.pageTitleRow}>
-        <Link href="/profile" className={appStyles.roundButton} aria-label="Back to profile">
-          <Icon name="back" />
-        </Link>
-        <h1 className={appStyles.pageTitle}>Edit Profile</h1>
-        <span style={{ width: 44 }} />
-      </div>
+      <div className="responsive-form-shell">
+        <div className={appStyles.pageTitleRow}>
+          <Link href="/profile" className={appStyles.roundButton} aria-label="Back to profile">
+            <Icon name="back" />
+          </Link>
+          <h1 className={appStyles.pageTitle}>Edit Profile</h1>
+          <span style={{ width: 44 }} />
+        </div>
 
-      <form className={appStyles.formCard} onSubmit={handleSubmit}>
+        <form className={appStyles.formCard} onSubmit={handleSubmit}>
         <section className={appStyles.imagePicker}>
           <UserAvatar profile={previewProfile} size="large" />
           <input
@@ -201,7 +202,8 @@ export default function EditProfileForm({ profile }: { profile: UserProfile }) {
         <button type="submit" className={appStyles.primaryPill} disabled={saving} style={{ width: "100%", marginTop: 22 }}>
           {saving ? "Saving Changes..." : "Save Changes"}
         </button>
-      </form>
+        </form>
+      </div>
     </AppScreen>
   );
 }

@@ -1,38 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AppScreen } from "@/components/app/AppUI";
-import type { UserProfile } from "@/components/app/types";
 
 export default function ContactPage() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const response = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = await response.json();
-        if (data.authenticated && data.user) {
-          setProfile({
-            id: data.user.userId,
-            firstName: data.user.name?.split(" ")[0] || "",
-            lastName: data.user.name?.split(" ")[1] || "",
-            fullName: data.user.name || data.user.email,
-            email: data.user.email,
-            phoneNumber: "",
-            profileImage: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-        }
-      } catch (e) {
-        console.error("Auth check failed", e);
-      }
-    }
-    checkAuth();
-  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +17,7 @@ export default function ContactPage() {
   };
 
   return (
-    <AppScreen profile={profile}>
+    <AppScreen>
       <div style={{ maxWidth: 650, margin: "0 auto", paddingBottom: 60 }}>
         <header style={{ textAlign: "center", marginBottom: 36, padding: "30px 0" }}>
           <span style={{ fontSize: 40 }}></span>

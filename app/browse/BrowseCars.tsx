@@ -11,22 +11,17 @@ import {
 } from "@/components/app/AppUI";
 import type { BrowseFilterConfig } from "@/components/app/AppUI";
 import type { CarListing } from "@/components/app/types";
-import type { UserProfile } from "@/components/app/types";
 
 interface BrowseClientProps {
   cars: CarListing[];
 }
 
 export default function BrowseClient({ cars }: BrowseClientProps) {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
 
   // ── Vehicle Bar filters (DB-derived options) ──
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [tripStart, setTripStart] = useState("");
-  const [tripEnd, setTripEnd] = useState("");
-
   // ── Sidebar filters (client-side filtering) ──
   const [selectedFuelTypes, setSelectedFuelTypes] = useState<string[]>([]);
   const [selectedTransmissions, setSelectedTransmissions] = useState<string[]>([]);
@@ -40,31 +35,6 @@ export default function BrowseClient({ cars }: BrowseClientProps) {
   const [mobileSelectedColors, setMobileSelectedColors] = useState<string[]>([]);
   const [mobileMinPrice, setMobileMinPrice] = useState("");
   const [mobileMaxPrice, setMobileMaxPrice] = useState("");
-
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const response = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = await response.json();
-        if (data.authenticated && data.user) {
-          setProfile({
-            id: data.user.userId,
-            firstName: data.user.name?.split(" ")[0] || "",
-            lastName: data.user.name?.split(" ")[1] || "",
-            fullName: data.user.name || data.user.email,
-            email: data.user.email,
-            phoneNumber: "",
-            profileImage: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-        }
-      } catch (e) {
-        console.error("Auth check failed", e);
-      }
-    }
-    checkAuth();
-  }, []);
 
   // ── Extract unique locations & categories from the DB data ──
   const locations = useMemo(
@@ -109,19 +79,14 @@ export default function BrowseClient({ cars }: BrowseClientProps) {
     });
   }, [cars, selectedLocation, selectedCategory, selectedFuelTypes, selectedTransmissions, selectedColors, minPrice, maxPrice]);
 
-  // ── Build the filter config that AppScreen passes to BrowseVehicleBar & FilterSidebar ──
+  // ── Build the filter config that AppScreen passes to FilterSidebar ──
   const browseFilters: BrowseFilterConfig = {
     locations,
     categories,
     selectedLocation,
     selectedCategory,
-    tripStart,
-    tripEnd,
     onLocationChange: setSelectedLocation,
     onCategoryChange: setSelectedCategory,
-    onTripStartChange: setTripStart,
-    onTripEndChange: setTripEnd,
-    onSearch: () => {/* filtering is instant via useMemo */},
     selectedFuelTypes,
     selectedTransmissions,
     selectedColors,
@@ -156,7 +121,7 @@ export default function BrowseClient({ cars }: BrowseClientProps) {
   const activeFilterCount = selectedFuelTypes.length + selectedTransmissions.length + selectedColors.length + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (selectedLocation ? 1 : 0) + (selectedCategory ? 1 : 0);
 
   return (
-    <AppScreen profile={profile} browseFilters={browseFilters}>
+    <AppScreen browseFilters={browseFilters}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         {/* Mobile search bar */}
         <section className={`${appStyles.searchBar} ${appStyles.mobileOnly}`} aria-label="Car search" style={{ marginBottom: 24 }}>

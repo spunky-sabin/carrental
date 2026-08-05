@@ -107,18 +107,6 @@ export async function POST(request: Request) {
 
   const car = result.rows[0];
 
-  // Notify the owner that their listing is under review
-  await query(
-    `INSERT INTO notifications (user_id, title, message, notification_type, is_read, created_at)
-     VALUES ($1, $2, $3, $4, false, NOW())`,
-    [
-      access.user.userId,
-      "Car Listing Submitted",
-      `Your ${payload.brand} ${payload.model} listing has been submitted and is pending admin review.`,
-      "listing_submitted",
-    ]
-  ).catch(() => null); // Non-critical
-
   return NextResponse.json(
     { car, message: "Car listing submitted for review. An admin will approve it shortly." },
     { status: 201 }

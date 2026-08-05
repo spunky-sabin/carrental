@@ -70,6 +70,7 @@ type OwnerDashboardCarRow = {
   approved_at: string | null;
   approved_by: number | null;
   rejection_reason: string | null;
+  appeal_reason: string | null;
   submitted_at: string | null;
   features: string[] | null;
 };
@@ -139,6 +140,8 @@ export type OwnerDashboardReview = {
   booking_id: number;
   rating: number;
   comment: string | null;
+  owner_reply: string | null;
+  owner_replied_at: string | null;
   created_at: string;
   renter_name: string;
   car_id: number;
@@ -233,7 +236,6 @@ export type OwnerDashboardData = {
   bookings: OwnerDashboardBooking[];
   reviews: OwnerDashboardReview[];
   payments: OwnerDashboardPayment[];
-  notifications: OwnerNotification[];
   availability: OwnerAvailabilityBlock[];
 
   documents: CarDocument[];
@@ -277,6 +279,7 @@ export async function ensureOwnerSchema() {
 async function runOwnerSchemaUpgrade() {
   const statements = [
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ALTER COLUMN booking_status TYPE VARCHAR(50)`,
     `ALTER TABLE bookings ALTER COLUMN expires_at TYPE TIMESTAMPTZ`,
     `ALTER TABLE bookings ALTER COLUMN reservation_expires_at TYPE TIMESTAMPTZ`,
     `ALTER TABLE bookings ALTER COLUMN created_at TYPE TIMESTAMPTZ`,
@@ -373,24 +376,27 @@ async function runOwnerSchemaUpgrade() {
     `ALTER TABLE cars ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP`,
     `ALTER TABLE cars ADD COLUMN IF NOT EXISTS approved_by INTEGER`,
     `ALTER TABLE cars ADD COLUMN IF NOT EXISTS rejection_reason TEXT`,
+    `ALTER TABLE cars ADD COLUMN IF NOT EXISTS appeal_reason TEXT`,
     `ALTER TABLE cars ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP`,
     `ALTER TABLE cars ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '[]'::jsonb`,
     `UPDATE bookings SET expires_at = reservation_expires_at WHERE expires_at IS NULL AND reservation_expires_at IS NOT NULL`,
-    `CREATE TABLE IF NOT EXISTS notifications (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      title VARCHAR(255) NOT NULL,
-      message TEXT NOT NULL,
-      notification_type VARCHAR(50),
-      is_read BOOLEAN DEFAULT false,
-      created_at TIMESTAMP DEFAULT NOW()
-    )`,
     // Extension payment tracking
     `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'UNPAID'`,
     `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`,
     `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS transaction_reference VARCHAR(255)`,
     `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP`,
     `ALTER TABLE booking_extensions ADD COLUMN IF NOT EXISTS rejection_reason TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS owner_reply TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS owner_replied_at TIMESTAMP`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP`,
+    `CREATE TABLE IF NOT EXISTS favorites (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user_id, car_id)
+    )`,
   ];
 
 
@@ -506,16 +512,12 @@ export async function requireAdminUser() {
 }
 
 export async function addNotification(userId: string | number, title: string, message: string, type: string) {
-  await query(
-    `INSERT INTO notifications (user_id, title, message, notification_type, is_read, created_at)
-     VALUES ($1, $2, $3, $4, false, NOW())`,
-    [userId, title, message, type]
-  );
+  // Notification system disabled - noop
 }
 
 export async function assertOwnerCar(ownerId: string | number, carId: number) {
-  const result = await query<{ id: number; status: string; is_active: boolean }>(
-    `SELECT id, status, is_active
+  const result = await query<{ id: number; status: string; is_active: boolean; approval_status: string | null; brand: string; model: string }>(
+    `SELECT id, status, is_active, approval_status, brand, model
      FROM cars
      WHERE id = $1 AND owner_id = $2`,
     [carId, ownerId]
@@ -646,6 +648,7 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
        LIMIT 1
      ) p ON true
      WHERE c.owner_id = $1
+       AND UPPER(b.booking_status) NOT IN ('CANCELLED', 'EXPIRED')
      ORDER BY b.created_at DESC`,
     [ownerId]
   );
@@ -656,6 +659,8 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
        r.booking_id,
        r.rating,
        r.comment,
+       r.owner_reply,
+       r.owner_replied_at,
        r.created_at,
        COALESCE(u.full_name, u.email) AS renter_name,
        c.id AS car_id,
@@ -688,15 +693,6 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
      WHERE c.owner_id = $1
      ORDER BY p.paid_at DESC NULLS LAST, p.id DESC
      LIMIT 100`,
-    [ownerId]
-  );
-
-  const notificationsResult = await query<OwnerNotification>(
-    `SELECT id, user_id, title, message, notification_type, is_read, created_at
-     FROM notifications
-     WHERE user_id = $1
-     ORDER BY created_at DESC
-     LIMIT 40`,
     [ownerId]
   );
 
@@ -743,11 +739,16 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
   const normalizedBookings = bookings.map((booking) => ({ ...booking, normalizedStatus: normalizeBookingStatus(booking.booking_status) }));
   const activeStatuses = new Set<OwnerBookingStatus>(["OWNER_ACCEPTED", "READY_FOR_PICKUP", "ACTIVE", "RETURN_PENDING"]);
   const cancelledStatuses = new Set<OwnerBookingStatus>(["CANCELLED", "REJECTED", "EXPIRED"]);
-  const bookingCount = bookings.length;
+  
+  // Successful bookings are those that were actually paid/confirmed
+  const successfulBookings = bookings.filter((b) => !["PAYMENT_PENDING", "CANCELLED", "EXPIRED", "REJECTED"].includes(normalizeBookingStatus(b.booking_status)));
+  const bookingCount = successfulBookings.length;
+  
+  // Total bookings for rate calculations (excludes initial PAYMENT_PENDING since they were never finalized)
+  const totalBookings = bookings.filter((b) => normalizeBookingStatus(b.booking_status) !== "PAYMENT_PENDING").length;
+  
   const cancelledCount = normalizedBookings.filter((booking) => cancelledStatuses.has(booking.normalizedStatus)).length;
-  const bookedDays = bookings
-    .filter((booking) => !cancelledStatuses.has(normalizeBookingStatus(booking.booking_status)))
-    .reduce((sum, booking) => sum + Number(booking.total_days || 0), 0);
+  const bookedDays = successfulBookings.reduce((sum, booking) => sum + Number(booking.total_days || 0), 0);
   const totalPossibleDays = Math.max(cars.filter((car) => car.is_active).length * 30, 1);
   const carViews = cars.reduce((sum, car) => sum + car.view_count, 0);
   const averageRating = reviews.length > 0
@@ -760,7 +761,6 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
     bookings,
     reviews,
     payments,
-    notifications: notificationsResult.rows,
     availability: availabilityResult.rows,
 
     documents: documentsResult.rows,
@@ -770,10 +770,10 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
       availableCars: cars.filter((car) => car.is_active && car.status === "available").length,
       activeRentals: normalizedBookings.filter((booking) => activeStatuses.has(booking.normalizedStatus)).length,
       pendingBookingRequests: normalizedBookings.filter((booking) => booking.normalizedStatus === "CONFIRMED").length,
-      earningsToday: sumPayments(paidPayments.filter((payment) => payment.paid_at?.slice(0, 10) === todayKey)),
-      earningsThisMonth: sumPayments(paidPayments.filter((payment) => payment.paid_at?.slice(0, 7) === monthKey)),
+      earningsToday: sumPayments(paidPayments.filter((payment) => payment.paid_at && new Date(payment.paid_at).toISOString().slice(0, 10) === todayKey)),
+      earningsThisMonth: sumPayments(paidPayments.filter((payment) => payment.paid_at && new Date(payment.paid_at).toISOString().slice(0, 7) === monthKey)),
       earningsWeek: sumPayments(paidPayments.filter((payment) => payment.paid_at && new Date(payment.paid_at) >= weekAgo)),
-      earningsYear: sumPayments(paidPayments.filter((payment) => payment.paid_at?.slice(0, 4) === yearKey)),
+      earningsYear: sumPayments(paidPayments.filter((payment) => payment.paid_at && new Date(payment.paid_at).toISOString().slice(0, 4) === yearKey)),
       lifetimeEarnings: sumPayments(paidPayments),
       upcomingReturns: normalizedBookings.filter((booking) => booking.normalizedStatus === "ACTIVE" || booking.normalizedStatus === "RETURN_PENDING").length,
       averageRating: Number(averageRating.toFixed(1)),
@@ -783,7 +783,7 @@ export const getOwnerDashboardData = cache(async (ownerId: string | number): Pro
       bookings: bookingCount,
       conversionRate: carViews > 0 ? Number(((bookingCount / carViews) * 100).toFixed(1)) : 0,
       occupancyRate: Number(Math.min((bookedDays / totalPossibleDays) * 100, 100).toFixed(1)),
-      cancellationRate: bookingCount > 0 ? Number(((cancelledCount / bookingCount) * 100).toFixed(1)) : 0,
+      cancellationRate: totalBookings > 0 ? Number(((cancelledCount / totalBookings) * 100).toFixed(1)) : 0,
       mostPopularVehicle: mostPopularVehicle ? `${mostPopularVehicle.brand} ${mostPopularVehicle.model}` : "No bookings yet",
     },
   };
@@ -856,6 +856,7 @@ export type AdminCarListing = {
   approval_status: string | null;
   approved_at: string | null;
   rejection_reason: string | null;
+  appeal_reason: string | null;
   submitted_at: string | null;
   features: string[] | null;
   created_at: string;
@@ -866,7 +867,7 @@ export type AdminCarListing = {
   images: { id: number; image_url: string; is_primary: boolean }[];
 };
 
-export async function getAdminCarListings(filter: "all" | "pending" | "approved" | "rejected" = "all") {
+export async function getAdminCarListings(filter: "all" | "pending" | "approved" | "rejected" | "removed" | "appealed" = "all") {
   await ensureOwnerSchema();
 
   const whereClause = filter === "all"
@@ -894,6 +895,7 @@ export async function getAdminCarListings(filter: "all" | "pending" | "approved"
        c.approval_status,
        c.approved_at,
        c.rejection_reason,
+       c.appeal_reason,
        c.submitted_at,
        c.features,
        c.created_at,
@@ -906,8 +908,10 @@ export async function getAdminCarListings(filter: "all" | "pending" | "approved"
      ORDER BY
        CASE LOWER(COALESCE(c.approval_status, 'approved'))
          WHEN 'pending' THEN 0
-         WHEN 'rejected' THEN 1
-         ELSE 2
+         WHEN 'appealed' THEN 1
+         WHEN 'rejected' THEN 2
+         WHEN 'removed' THEN 3
+         ELSE 4
        END,
        c.submitted_at DESC NULLS LAST,
        c.created_at DESC`
@@ -941,5 +945,3 @@ export async function getAdminCarListings(filter: "all" | "pending" | "approved"
     images: imagesByCar.get(car.id) || (car.primary_image ? [{ id: 0, image_url: car.primary_image, is_primary: true }] : []),
   }));
 }
-
-

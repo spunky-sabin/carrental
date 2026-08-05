@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AppScreen, Icon } from "@/components/app/AppUI";
+import { AppScreen, Icon, Modal } from "@/components/app/AppUI";
 import type { UserProfile } from "@/components/app/types";
 import type { BookingWithCar } from "./page";
 import styles from "./MyBookings.module.css";
@@ -27,7 +27,7 @@ function getGroup(status: string): StatusGroup {
   const s = normalize(status);
   if (s === "PAYMENT_PENDING") return "payment_pending";
   if (s === "CONFIRMED") return "awaiting_approval";
-  if (s === "OWNER_ACCEPTED" || s === "READY_FOR_PICKUP") return "upcoming";
+  if (s === "OWNER_ACCEPTED" || s === "READY_FOR_PICKUP" || s === "HANDOVER_PENDING") return "upcoming";
   if (s === "ACTIVE") return "active";
   if (s === "RETURN_REQUESTED") return "return_requested";
   if (s === "RETURN_PENDING") return "return_pending";
@@ -59,8 +59,9 @@ function timeAgo(dateStr: string) {
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   PAYMENT_PENDING:  { label: "Payment Pending",       color: "#b45309", bg: "#fef3c7" },
   CONFIRMED:        { label: "Awaiting Owner",         color: "#7c3aed", bg: "#ede9fe" },
-  OWNER_ACCEPTED:   { label: "Upcoming",               color: "#0369a1", bg: "#e0f2fe" },
+  OWNER_ACCEPTED:   { label: "Booked",               color: "#0369a1", bg: "#e0f2fe" },
   READY_FOR_PICKUP: { label: "Ready for Pickup",       color: "#059669", bg: "#d1fae5" },
+  HANDOVER_PENDING: { label: "Accept Handover",        color: "#d97706", bg: "#fef3c7" },
   ACTIVE:           { label: "Active Rental",          color: "#047857", bg: "#a7f3d0" },
   RETURN_REQUESTED: { label: "Return Requested",       color: "#0891b2", bg: "#cffafe" },
   RETURN_PENDING:   { label: "Return Pending",         color: "#b45309", bg: "#fef3c7" },
@@ -75,6 +76,7 @@ const TIMELINE_STEPS = [
   { key: "CONFIRMED",        label: "Payment Completed" },
   { key: "OWNER_ACCEPTED",   label: "Owner Confirmed" },
   { key: "READY_FOR_PICKUP", label: "Ready for Pickup" },
+  { key: "HANDOVER_PENDING", label: "Handover Initiated" },
   { key: "ACTIVE",           label: "Vehicle Picked Up" },
   { key: "RETURN_REQUESTED", label: "Return Requested" },
   { key: "RETURN_PENDING",   label: "Return Pending" },
@@ -86,6 +88,7 @@ const STATUS_ORDER = [
   "CONFIRMED",
   "OWNER_ACCEPTED",
   "READY_FOR_PICKUP",
+  "HANDOVER_PENDING",
   "ACTIVE",
   "RETURN_REQUESTED",
   "RETURN_PENDING",
@@ -104,7 +107,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "payment_pending", label: "Pending Payment" },
   { id: "awaiting_approval", label: "Awaiting Approval" },
-  { id: "upcoming", label: "Upcoming" },
+  { id: "upcoming", label: "Booked" },
   { id: "active", label: "Active" },
   { id: "return_requested", label: "Return Requested" },
   { id: "return_pending", label: "Return Pending" },
@@ -122,6 +125,14 @@ export default function MyBookings({
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [expandedTimeline, setExpandedTimeline] = useState<Set<number>>(new Set());
   const [extensionModal, setExtensionModal] = useState<{ bookingId: number; returnDate: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    bookingId: number;
+    action: "cancel" | "signal-return" | "accept-handover";
+    title: string;
+    description: string;
+    confirmLabel: string;
+    danger?: boolean;
+  } | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -167,14 +178,42 @@ export default function MyBookings({
     }
   }
 
-  async function handleCancelPayment(bookingId: number) {
-    if (!confirm("Cancel this booking? This cannot be undone.")) return;
-    await doAction(bookingId, `/api/bookings/${bookingId}/cancel`);
+  function handleCancelPayment(bookingId: number) {
+    setConfirmModal({
+      bookingId,
+      action: "cancel",
+      title: "Cancel Booking",
+      description: "Are you sure you want to cancel this booking? This cannot be undone.",
+      confirmLabel: "Cancel Booking",
+      danger: true,
+    });
   }
 
-  async function handleSignalReturn(bookingId: number) {
-    if (!confirm("Signal the owner that you're ready to return the vehicle?")) return;
-    await doAction(bookingId, `/api/bookings/${bookingId}/signal-return`);
+  function handleSignalReturn(bookingId: number) {
+    setConfirmModal({
+      bookingId,
+      action: "signal-return",
+      title: "Signal Return",
+      description: "You are about to signal return of the vehicle to the owner. Do you confirm?",
+      confirmLabel: "Signal Return",
+    });
+  }
+
+  function handleAcceptHandover(bookingId: number) {
+    setConfirmModal({
+      bookingId,
+      action: "accept-handover",
+      title: "Accept Vehicle",
+      description: "Accept the vehicle? This officially starts the active rental period.",
+      confirmLabel: "Accept",
+    });
+  }
+
+  async function executeConfirmAction() {
+    if (!confirmModal) return;
+    const { bookingId, action } = confirmModal;
+    setConfirmModal(null);
+    await doAction(bookingId, `/api/bookings/${bookingId}/${action}`);
   }
 
   async function handleExtensionRequest(bookingId: number, currentReturnDate: string) {
@@ -208,8 +247,9 @@ export default function MyBookings({
         }
         document.body.appendChild(form);
         form.submit();
-      } else if (data.checkout_url) {
-        window.location.href = data.checkout_url;
+      } else if (data.provider === "sandbox_card") {
+        showToast(data.message || "Sandbox payment confirmed.");
+        window.location.reload();
       }
     } catch (err: any) {
       showToast(err.message || "Payment failed", "error");
@@ -233,6 +273,20 @@ export default function MyBookings({
           currentReturnDate={extensionModal.returnDate}
           onClose={() => setExtensionModal(null)}
           onSuccess={(msg) => { showToast(msg); setExtensionModal(null); setTimeout(() => window.location.reload(), 1200); }}
+        />
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <Modal
+          title={confirmModal.title}
+          description={confirmModal.description}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel="Close"
+          danger={confirmModal.danger}
+          loading={actionLoading === confirmModal.bookingId}
+          onConfirm={executeConfirmAction}
+          onCancel={() => setConfirmModal(null)}
         />
       )}
 
@@ -280,6 +334,7 @@ export default function MyBookings({
                 isTimelineExpanded={expandedTimeline.has(booking.id)}
                 onToggleTimeline={() => toggleTimeline(booking.id)}
                 onCancelPayment={handleCancelPayment}
+                onAcceptHandover={handleAcceptHandover}
                 onSignalReturn={handleSignalReturn}
                 onRequestExtension={handleExtensionRequest}
                 onPayExtension={handlePayExtension}
@@ -300,6 +355,7 @@ function BookingCard({
   isTimelineExpanded,
   onToggleTimeline,
   onCancelPayment,
+  onAcceptHandover,
   onSignalReturn,
   onRequestExtension,
   onPayExtension,
@@ -309,6 +365,7 @@ function BookingCard({
   isTimelineExpanded: boolean;
   onToggleTimeline: () => void;
   onCancelPayment: (id: number) => void;
+  onAcceptHandover: (id: number) => void;
   onSignalReturn: (id: number) => void;
   onRequestExtension: (id: number, returnDate: string) => void;
   onPayExtension: (id: number, method?: string) => void;
@@ -364,8 +421,8 @@ function BookingCard({
             <button onClick={() => onPayExtension(booking.id, "esewa")} className={styles.payBtn} disabled={loading}>
               Pay with eSewa
             </button>
-            <button onClick={() => onPayExtension(booking.id, "paybridge")} className={styles.payBtn} disabled={loading}>
-              Pay with PayBridge
+            <button onClick={() => onPayExtension(booking.id, "sandbox_card")} className={styles.payBtn} disabled={loading}>
+              Pay with Sandbox Card
             </button>
           </div>
         </div>
@@ -416,6 +473,17 @@ function BookingCard({
             disabled={loading}
           >
             {loading ? "..." : "Cancel"}
+          </button>
+        )}
+
+        {/* HANDOVER_PENDING: user must accept */}
+        {s === "HANDOVER_PENDING" && (
+          <button
+            className={`${styles.actionBtn} ${styles.primaryBtn}`}
+            onClick={() => onAcceptHandover(booking.id)}
+            disabled={loading}
+          >
+            {loading ? "..." : "Accept Vehicle"}
           </button>
         )}
 

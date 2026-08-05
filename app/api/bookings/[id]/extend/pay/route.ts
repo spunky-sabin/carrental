@@ -3,7 +3,6 @@ import { query } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { ensureOwnerSchema } from "@/lib/owner";
 import { buildEsewaPayload } from "@/lib/esewa";
-import { getPayBridgeClient } from "@/lib/paybridge";
 
 // POST /api/bookings/[id]/extend/pay
 // Initiates payment for an approved booking extension
@@ -81,42 +80,24 @@ export async function POST(
       });
     }
 
-    // PayBridge flow for extension payment
-    try {
-      const userResult = await query<{ full_name: string | null; email: string; phone: string | null }>(
-        "SELECT full_name, email, phone FROM users WHERE id = $1",
-        [session.userId]
+    if (paymentMethod === "sandbox_card") {
+      await query(
+        `UPDATE booking_extensions
+         SET payment_status = 'PAID',
+             paid_at = NOW(),
+             transaction_reference = $2
+         WHERE id = $1`,
+        [ext.id, `SANDBOX_CARD_EXT_${Date.now()}`]
       );
-      const user = userResult.rows[0];
-      const amountInPaisa = Math.round(amountNpr * 100);
-      const client = getPayBridgeClient();
-
-      const sessionResponse = await client.checkout.create({
-        amount: amountInPaisa,
-        currency: "NPR",
-        customer: {
-          name: user?.full_name || "Customer",
-          email: user?.email || "customer@example.com",
-          phone: user?.phone || undefined,
-        },
-        metadata: {
-          booking_id: String(bookingId),
-          extension_id: String(ext.id),
-          order_id: `EXT_${ext.id}`,
-        },
-        returnUrl: `${origin}/api/payments/extension/callback?booking_id=${bookingId}&extension_id=${ext.id}&provider=paybridge`,
-        cancelUrl: `${origin}/api/payments/cancel?booking_id=${bookingId}&extension_id=${ext.id}`,
-      });
 
       return NextResponse.json({
         success: true,
-        provider: "paybridge",
-        checkout_url: sessionResponse.checkout_url,
+        provider: "sandbox_card",
+        message: "Sandbox card extension payment confirmed.",
       });
-    } catch (err) {
-      console.error("PayBridge extension payment error:", err);
-      return NextResponse.json({ error: "Payment gateway error. Please try again." }, { status: 500 });
     }
+
+    return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
 
   } catch (error) {
     console.error("Extension payment error:", error);

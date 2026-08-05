@@ -57,7 +57,7 @@ export default function AdminOwnerApplicationsClient({
   return (
     <AppScreen profile={profile} requireAuth>
       <div className={styles.ownerPage}>
-        <div className={styles.content}>
+        <div className={`${styles.content} responsive-form-shell`}>
           <header className={styles.hero}>
             <div>
               <p className={styles.eyebrow}>Admin controls</p>
