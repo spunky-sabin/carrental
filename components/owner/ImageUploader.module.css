@@ -3,6 +3,7 @@
   gap: 16px;
 }
 
+/* ── Drop zone ─────────────────────────────────────────── */
 .dropZone {
   border: 2px dashed #d7d7d7;
   border-radius: 20px;
@@ -20,19 +21,19 @@
 }
 
 .dropZone:hover {
-  border-color: #3b82f6;
+  border-color: #2563eb;
   background: #eff6ff;
 }
 
 .dropZone:focus-visible {
-  outline: 3px solid #3b82f6;
+  outline: 3px solid #2563eb;
   outline-offset: 2px;
 }
 
 .dropZoneActive {
-  border-color: #3b82f6;
+  border-color: #2563eb;
   background: #eff6ff;
-  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.15);
 }
 
 .dropZoneUploading {
@@ -49,10 +50,21 @@
   width: 36px;
   height: 36px;
   border: 3px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   display: block;
+}
+
+.spinnerSmall {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 @keyframes spin {
@@ -73,6 +85,7 @@
   font-weight: 600;
 }
 
+/* ── Feedback ──────────────────────────────────────────── */
 .notice {
   border-radius: 14px;
   padding: 11px 14px;
@@ -80,7 +93,7 @@
   border: 1px solid #bbf7d0;
   color: #166534;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .noticeError {
@@ -90,14 +103,169 @@
   border: 1px solid #fecdd3;
   color: #be123c;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
-/* Image grid */
+/* ── Toolbar row ───────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-height: 44px;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.reorderTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reorderIcon {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.reorderText {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.reorderText strong {
+  color: #1e293b;
+}
+
+.reorderSaving {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+/* ── Select all label ──────────────────────────────────── */
+.selectAllLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+}
+
+.selectAllCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.selectedCount {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* ── Select toggle button ──────────────────────────────── */
+.selectToggle,
+.selectToggleActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.selectToggle {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.selectToggle:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.selectToggleActive {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #0f172a;
+}
+
+.selectToggleActive:hover {
+  background: #334155;
+}
+
+/* ── Bulk delete button ────────────────────────────────── */
+.bulkDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid #ef4444;
+  background: #ef4444;
+  color: #fff;
+  transition: all 0.15s;
+  white-space: nowrap;
+  animation: slideIn 0.18s ease;
+}
+
+.bulkDeleteBtn:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.bulkDeleteBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── Image grid ────────────────────────────────────────── */
 .imageGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 14px;
 }
 
 .imageCard {
@@ -106,42 +274,138 @@
   overflow: hidden;
   background: #fff;
   position: relative;
-  transition: border-color 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s, opacity 0.15s;
+  cursor: grab;
+  user-select: none;
 }
 
-.imageCardPrimary {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+.imageCard:active {
+  cursor: grabbing;
 }
 
-.primaryBadge {
+/* Cover — first image */
+.coverCard {
+  border: 3px solid #2563eb !important;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.22);
+}
+
+/* Selectable mode — pointer cursor, no drag */
+.selectableCard {
+  cursor: pointer;
+}
+
+.selectableCard:hover {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+/* Selected card */
+.selectedCard {
+  border: 3px solid #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.22);
+}
+
+/* Drag states */
+.draggingCard {
+  opacity: 0.4;
+  transform: scale(0.95);
+  border: 2px dashed #94a3b8 !important;
+}
+
+.dragTargetCard {
+  border: 3px dashed #2563eb !important;
+  background: #eff6ff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+  transform: scale(1.02);
+}
+
+/* Cover badge */
+.coverBadge {
   position: absolute;
   top: 8px;
   left: 8px;
-  background: #3b82f6;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #fff;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: 999px;
-  padding: 3px 9px;
-  z-index: 1;
+  padding: 4px 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
 }
 
+/* Selection checkbox overlay */
+.selectCheckbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.selectCheckbox:hover {
+  transform: scale(1.1);
+}
+
+.selectCheckboxChecked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Drag handle */
+.dragHandle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.imageCard:hover .dragHandle {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.85);
+}
+
+/* Image preview */
 .imagePreview {
   width: 100%;
-  height: 120px;
+  height: 125px;
   object-fit: cover;
   display: block;
+  pointer-events: none;
 }
 
+/* Action buttons */
 .imageActions {
   display: flex;
   gap: 4px;
   padding: 8px;
-  background: #f9fafb;
-  flex-wrap: wrap;
+  background: #f8fafc;
 }
 
 .actionBtn,
@@ -161,12 +425,12 @@
 }
 
 .actionBtn {
-  background: #e5e7eb;
-  color: #374151;
+  background: #e2e8f0;
+  color: #334155;
 }
 
 .actionBtn:hover:not(:disabled) {
-  background: #d1d5db;
+  background: #cbd5e1;
 }
 
 .actionBtn:disabled {
@@ -179,12 +443,13 @@
   color: #be123c;
 }
 
-.actionBtnDanger:hover {
+.actionBtnDanger:hover:not(:disabled) {
   background: #fecaca;
 }
 
+/* Empty state */
 .emptyImages {
-  border: 1px dashed #d1d5db;
+  border: 1px dashed #cbd5e1;
   border-radius: 16px;
   padding: 28px;
   text-align: center;

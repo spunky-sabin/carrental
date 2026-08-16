@@ -27,16 +27,19 @@
 
 .heroImage {
   width: 100%;
-  height: 320px;
+  height: 520px;
   border-radius: 28px;
   overflow: hidden;
   background: #f1f5f9;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (min-width: 768px) {
   .heroImage {
-    height: 420px;
+    height: 720px;
   }
 }
 
@@ -44,6 +47,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
+  background: #ffffff;
 }
 
 .heroFallback {
@@ -92,6 +97,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
+  background: #ffffff;
 }
 
 .thumbnailActive {

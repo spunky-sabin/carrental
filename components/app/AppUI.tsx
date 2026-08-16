@@ -32,7 +32,15 @@ type IconName =
   | "briefcase"
   | "logout"
   | "camera"
-  | "back";
+  | "back"
+  /* Additional icons used across pages */
+  | "check"
+  | "check-circle"
+  | "alert-circle"
+  | "loader"
+  | "upload"
+  | "file"
+  | "lock";
 
 export function getInitials(profile: Pick<UserProfile, "firstName" | "lastName" | "fullName" | "email">) {
   const source = profile.fullName || [profile.firstName, profile.lastName].join(" ") || profile.email;
@@ -232,6 +240,57 @@ export function Icon({ name, size = 20, filled = false }: { name: IconName; size
           <path d="M15 18 9 12l6-6" />
         </svg>
       );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      );
+    case "check-circle":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9 12.5 11.5 15 16 10.5" />
+        </svg>
+      );
+    case "alert-circle":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </svg>
+      );
+    case "loader":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" strokeWidth={2} stroke="currentColor" fill="none" strokeLinecap="round" strokeDasharray="40" strokeDashoffset="10">
+            <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
+          </circle>
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 3v12" />
+          <path d="m8 7 4-4 4 4" />
+          <path d="M4 21h16" />
+        </svg>
+      );
+    case "file":
+      return (
+        <svg {...common}>
+          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <path d="M14 3v6h6" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...common}>
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <path d="M7 11V9a5 5 0 0 1 10 0v2" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -368,25 +427,19 @@ export function AppScreen({
           <DesktopTopNav profile={resolvedProfile} />
           <div className={styles.glassCard}>
             {isBrowse && browseFilters ? (
-              <>
-                <BrowseVehicleBar filters={browseFilters} />
-                <div className={styles.homeLayout}>
-                  <div className={styles.homeContent}>
-                    {children}
-                  </div>
-                  <FilterSidebar filters={browseFilters} />
+              <div className={styles.homeLayout}>
+                <div className={styles.homeContent}>
+                  {children}
                 </div>
-              </>
+                <FilterSidebar filters={browseFilters} />
+              </div>
             ) : isBrowse ? (
-              <>
-                <BrowseVehicleBar />
-                <div className={styles.homeLayout}>
-                  <div className={styles.homeContent}>
-                    {children}
-                  </div>
-                  <FilterSidebar />
+              <div className={styles.homeLayout}>
+                <div className={styles.homeContent}>
+                  {children}
                 </div>
-              </>
+                <FilterSidebar />
+              </div>
             ) : (
               <div style={{ padding: "42px 48px", overflowY: "auto" }}>
                 {children}
@@ -414,7 +467,7 @@ export function DesktopTopNav({ profile }: { profile?: UserProfile | null }) {
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" || pathname === "/" },
     { href: "/browse", label: "Browse Cars", icon: "car" as IconName, active: pathname.startsWith("/browse") },
     ownerItem,
-    { href: "/about", label: "About", icon: "support" as IconName, active: pathname.startsWith("/about") },
+    { href: "/bookings", label: "My Bookings", icon: "clock" as IconName, active: pathname.startsWith("/bookings") },
     { href: "/contact", label: "Contact", icon: "message" as IconName, active: pathname.startsWith("/contact") },
   ];
 
@@ -514,8 +567,51 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
   const transmissions = ["automatic", "manual"];
   const colors = ["White", "Black", "Silver", "Red", "Blue", "Grey"];
 
+  const hasActiveFilters =
+    !!(filters?.selectedLocation) ||
+    !!(filters?.selectedCategory) ||
+    !!(filters?.selectedFuelTypes.length) ||
+    !!(filters?.selectedTransmissions.length) ||
+    !!(filters?.selectedColors.length) ||
+    !!(filters?.minPrice) ||
+    !!(filters?.maxPrice);
+
   return (
     <aside className={styles.rightSidebar}>
+
+      {/* ── Pickup Location ── */}
+      <div className={styles.filterSection}>
+        <h3>Pickup Location</h3>
+        <select
+          className={styles.filterSelect}
+          value={filters?.selectedLocation ?? ""}
+          onChange={(e) => filters?.onLocationChange(e.target.value)}
+        >
+          <option value="">All Locations</option>
+          {(filters?.locations ?? []).map(loc => (
+            <option key={loc} value={loc}>{loc}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* ── Vehicle Type ── */}
+      <div className={styles.filterSection}>
+        <h3>Vehicle Type</h3>
+        <select
+          className={styles.filterSelect}
+          value={filters?.selectedCategory ?? ""}
+          onChange={(e) => filters?.onCategoryChange(e.target.value)}
+        >
+          <option value="">All Vehicles</option>
+          {(filters?.categories ?? []).map(cat => (
+            <option key={cat} value={cat} style={{ textTransform: "capitalize" }}>
+              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ── Price Range ── */}
       <div className={styles.filterSection}>
         <h3>Price Range</h3>
         <div className={styles.priceRange}>
@@ -537,6 +633,7 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
         </div>
       </div>
 
+      {/* ── Fuel Type ── */}
       <div className={styles.filterSection}>
         <h3>Fuel Type</h3>
         <div className={styles.checkboxList}>
@@ -553,6 +650,7 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
         </div>
       </div>
 
+      {/* ── Transmission ── */}
       <div className={styles.filterSection}>
         <h3>Transmission</h3>
         <div className={styles.checkboxList}>
@@ -569,6 +667,7 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
         </div>
       </div>
 
+      {/* ── Color ── */}
       <div className={styles.filterSection}>
         <h3>Color</h3>
         <div className={styles.checkboxList}>
@@ -585,7 +684,8 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
         </div>
       </div>
 
-      {(filters?.selectedFuelTypes.length || filters?.selectedTransmissions.length || filters?.selectedColors.length || filters?.minPrice || filters?.maxPrice) ? (
+      {/* ── Clear All ── */}
+      {hasActiveFilters ? (
         <button
           type="button"
           style={{
@@ -601,6 +701,8 @@ export function FilterSidebar({ filters }: { filters?: BrowseFilterConfig }) {
             marginTop: 8,
           }}
           onClick={() => {
+            filters?.onLocationChange("");
+            filters?.onCategoryChange("");
             filters?.selectedFuelTypes.forEach(f => filters.onFuelTypeToggle(f));
             filters?.selectedTransmissions.forEach(t => filters.onTransmissionToggle(t));
             filters?.selectedColors.forEach(c => filters.onColorToggle(c));
@@ -776,12 +878,12 @@ export function BottomNavigation({ profile }: { profile?: UserProfile | null }) 
     ? { href: "/admin", label: "Dashboard", icon: "settings" as IconName, active: pathname.startsWith("/admin") }
     : isOwner
       ? { href: "/owner", label: "Owner", icon: "briefcase" as IconName, active: pathname.startsWith("/owner") }
-      : { href: "/bookings", label: "Bookings", icon: "clock" as IconName, active: pathname.startsWith("/bookings") };
+      : { href: "/messages", label: "Messages", icon: "message" as IconName, active: pathname.startsWith("/messages") };
   const items = [
     { href: "/home", label: "Home", icon: "home" as IconName, active: pathname === "/home" || pathname === "/" },
     { href: "/browse", label: "Browse", icon: "car" as IconName, active: pathname.startsWith("/browse") },
     ownerItem,
-    { href: "/about", label: "About", icon: "support" as IconName, active: pathname.startsWith("/about") },
+    { href: "/bookings", label: "Bookings", icon: "clock" as IconName, active: pathname.startsWith("/bookings") },
     { href: profile ? "/profile" : "/login", label: profile ? "Profile" : "Login", icon: "user" as IconName, active: pathname.startsWith("/profile") || pathname.startsWith("/login") },
   ];
 

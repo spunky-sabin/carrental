@@ -76,13 +76,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Rejection reason is required." }, { status: 400 });
     }
 
+    const allowReapply = typeof body.allow_reapply !== 'undefined' ? Boolean(body.allow_reapply) : false;
+
     await query(
       `UPDATE owner_applications
        SET application_status = 'rejected',
            rejection_reason = $2,
+           allow_reapply = $3,
            updated_at = NOW()
        WHERE id = $1`,
-      [applicationId, rejectionReason]
+      [applicationId, rejectionReason, allowReapply]
     );
     await addNotification(application.user_id, "Owner application rejected", rejectionReason, "Booking Cancelled");
 

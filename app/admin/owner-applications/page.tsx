@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Owner Applications - Admin",
+  
 };
 
 export default async function AdminOwnerApplicationsPage() {

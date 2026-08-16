@@ -1,15 +1,8 @@
-import { getSessionUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import DesktopSignup from "@/components/DesktopSignup";
 import MobileSignup from "@/components/MobileSignup";
 import { AppScreen } from "@/components/app/AppUI";
 
-export default async function SignupPage() {
-  const session = await getSessionUser();
-  if (session) {
-    redirect("/home");
-  }
-
+export default function SignupPage() {
   return (
     <AppScreen profile={null}>
       <div className="hidden lg:block">

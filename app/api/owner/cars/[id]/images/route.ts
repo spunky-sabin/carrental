@@ -55,8 +55,21 @@ export async function PATCH(request: Request, { params }: Params) {
   if ("response" in result) return result.response;
 
   const body = await request.json();
-  const imageId = Number(body.imageId);
 
+  if (body.action === "reorder_all" && Array.isArray(body.imageIds)) {
+    const imageIds: number[] = body.imageIds.map(Number);
+    for (let index = 0; index < imageIds.length; index++) {
+      const imgId = imageIds[index];
+      const isPrimary = index === 0;
+      await query(
+        "UPDATE car_images SET display_order = $1, is_primary = $2 WHERE id = $3 AND car_id = $4",
+        [index, isPrimary, imgId, result.carId]
+      );
+    }
+    return NextResponse.json({ message: "Image order updated." });
+  }
+
+  const imageId = Number(body.imageId);
   if (!imageId) {
     return NextResponse.json({ error: "Image ID is required." }, { status: 400 });
   }
@@ -93,6 +106,12 @@ export async function PATCH(request: Request, { params }: Params) {
       const neighbor = neighborResult.rows[0];
       await query("UPDATE car_images SET display_order = $1 WHERE id = $2", [neighbor.display_order, current.id]);
       await query("UPDATE car_images SET display_order = $1 WHERE id = $2", [current.display_order, neighbor.id]);
+      await query("UPDATE car_images SET is_primary = false WHERE car_id = $1", [result.carId]);
+      await query(
+        `UPDATE car_images SET is_primary = true
+         WHERE id = (SELECT id FROM car_images WHERE car_id = $1 ORDER BY display_order ASC, id ASC LIMIT 1)`,
+        [result.carId]
+      );
     }
 
     return NextResponse.json({ message: "Image order updated." });
@@ -106,22 +125,43 @@ export async function DELETE(request: Request, { params }: Params) {
   if ("response" in result) return result.response;
 
   const body = await request.json();
-  const imageId = Number(body.imageId);
 
+  // Bulk delete: accept imageIds array
+  if (Array.isArray(body.imageIds) && body.imageIds.length > 0) {
+    const imageIds: number[] = body.imageIds.map(Number).filter(Boolean);
+    for (const imgId of imageIds) {
+      await query("DELETE FROM car_images WHERE id = $1 AND car_id = $2", [imgId, result.carId]);
+    }
+    // Re-assign primary to the new first image
+    await query("UPDATE car_images SET is_primary = false WHERE car_id = $1", [result.carId]);
+    await query(
+      `UPDATE car_images
+       SET is_primary = true
+       WHERE id = (
+         SELECT id FROM car_images WHERE car_id = $1 ORDER BY display_order ASC, id ASC LIMIT 1
+       )`,
+      [result.carId]
+    );
+    return NextResponse.json({ message: `${imageIds.length} image${imageIds.length > 1 ? "s" : ""} deleted.` });
+  }
+
+  // Single delete
+  const imageId = Number(body.imageId);
   if (!imageId) {
     return NextResponse.json({ error: "Image ID is required." }, { status: 400 });
   }
 
   await query("DELETE FROM car_images WHERE id = $1 AND car_id = $2", [imageId, result.carId]);
+  await query("UPDATE car_images SET is_primary = false WHERE car_id = $1", [result.carId]);
   await query(
     `UPDATE car_images
      SET is_primary = true
      WHERE id = (
        SELECT id FROM car_images WHERE car_id = $1 ORDER BY display_order ASC, id ASC LIMIT 1
-     )
-     AND NOT EXISTS (SELECT 1 FROM car_images WHERE car_id = $1 AND is_primary = true)`,
+     )`,
     [result.carId]
   );
 
   return NextResponse.json({ message: "Image deleted." });
 }
+

@@ -229,6 +229,7 @@ export type OwnerApplicationRecord = {
   submitted_at: string | null;
   approved_at: string | null;
   updated_at: string | null;
+  allow_reapply?: boolean | null;
 };
 
 export type OwnerDashboardData = {
@@ -309,6 +310,9 @@ async function runOwnerSchemaUpgrade() {
     `ALTER TABLE owner_applications ADD COLUMN IF NOT EXISTS verification_info TEXT`,
     `ALTER TABLE owner_applications ADD COLUMN IF NOT EXISTS document_urls JSONB DEFAULT '[]'::jsonb`,
     `ALTER TABLE owner_applications ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`,
+    `ALTER TABLE owner_applications ADD COLUMN IF NOT EXISTS allow_reapply BOOLEAN DEFAULT false`,
+    `UPDATE owner_applications SET allow_reapply = true WHERE LOWER(application_status) = 'rejected'`,
+
     `ALTER TABLE owner_profiles ADD COLUMN IF NOT EXISTS business_name VARCHAR(160)`,
     `ALTER TABLE owner_profiles ADD COLUMN IF NOT EXISTS phone VARCHAR(40)`,
     `ALTER TABLE owner_profiles ADD COLUMN IF NOT EXISTS email VARCHAR(255)`,
@@ -834,6 +838,40 @@ export async function getOwnerApplications() {
     ...application,
     document_urls: Array.isArray(application.document_urls) ? application.document_urls : [],
   }));
+}
+
+// Admin helpers
+export async function getAdminUsers() {
+  await ensureOwnerSchema();
+
+  const result = await query<{
+    id: number;
+    full_name: string | null;
+    email: string;
+    phone: string | null;
+    role: string;
+    status: string | null;
+    is_verified: boolean | null;
+    created_at: string;
+    booking_count: string;
+    listing_count: string;
+  }>(
+    `SELECT
+       u.id,
+       u.full_name,
+       u.email,
+       u.phone,
+       u.role,
+       u.status,
+       u.is_verified,
+       u.created_at,
+       (SELECT COUNT(*) FROM bookings b WHERE b.renter_id = u.id) AS booking_count,
+       (SELECT COUNT(*) FROM cars c WHERE c.owner_id = u.id) AS listing_count
+     FROM users u
+     ORDER BY u.created_at DESC`
+  );
+
+  return result.rows;
 }
 
 export type AdminCarListing = {

@@ -717,7 +717,7 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
 
                 {carForm.id && (
                   <div style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid var(--owner-border)" }}>
-                    <PanelHeader title="Manage Vehicle Images" text="Upload, reorder, or set primary cover photo." />
+                    <PanelHeader title="Manage Vehicle Images" text="Upload and drag photos to rearrange. The first image is always set as the cover photo." />
                     <ImageUploader 
                       carId={carForm.id} 
                       images={data.cars.find(c => c.id === carForm.id)?.images || []} 

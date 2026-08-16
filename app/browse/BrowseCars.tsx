@@ -22,6 +22,8 @@ export default function BrowseClient({ cars }: BrowseClientProps) {
   // ── Vehicle Bar filters (DB-derived options) ──
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [tripStart, setTripStart] = useState("");
+  const [tripEnd, setTripEnd] = useState("");
   // ── Sidebar filters (client-side filtering) ──
   const [selectedFuelTypes, setSelectedFuelTypes] = useState<string[]>([]);
   const [selectedTransmissions, setSelectedTransmissions] = useState<string[]>([]);
@@ -85,8 +87,13 @@ export default function BrowseClient({ cars }: BrowseClientProps) {
     categories,
     selectedLocation,
     selectedCategory,
+    tripStart,
+    tripEnd,
     onLocationChange: setSelectedLocation,
     onCategoryChange: setSelectedCategory,
+    onTripStartChange: setTripStart,
+    onTripEndChange: setTripEnd,
+    onSearch: () => console.log("Search clicked"),
     selectedFuelTypes,
     selectedTransmissions,
     selectedColors,

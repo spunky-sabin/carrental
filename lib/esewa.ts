@@ -7,10 +7,11 @@ export interface EsewaPaymentConfig {
 }
 
 export function getEsewaConfig(): EsewaPaymentConfig {
+  // eSewa credentials intentionally hardcoded per user request (public/test credentials)
   return {
-    productCode: process.env.ESEWA_PRODUCT_CODE || "EPAYTEST",
-    secretKey: process.env.ESEWA_SECRET_KEY || "8gBm/:&EnhH.1/q",
-    gatewayUrl: process.env.ESEWA_GATEWAY_URL || "https://rc-epay.esewa.com.np/api/epay/main/v2/form",
+    productCode: "EPAYTEST",
+    secretKey: "8gBm/:&EnhH.1/q",
+    gatewayUrl: "https://rc-epay.esewa.com.np/api/epay/main/v2/form",
   };
 }
 
