@@ -1,14 +1,48 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+// Lazy initialization helpers for environments (build vs runtime) where env vars
+// may not be present at module evaluation time. This emits clear diagnostics when
+// variables are missing instead of failing with an opaque "supabaseUrl is required".
 
-// Singleton client — safe to import on server or client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let _supabase: ReturnType<typeof createClient> | null = null;
+let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
 
-// Admin client — ONLY use on the server for admin tasks to bypass RLS
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+function missingEnvMessage(): string {
+  return (
+    "Missing required Supabase environment variables. " +
+    "Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured for the build environment."
+  );
+}
+
+export function getSupabase() {
+  if (_supabase) return _supabase;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Log presence (without printing secrets) to help debugging in CI.
+    console.error("Supabase env presence: NEXT_PUBLIC_SUPABASE_URL=", !!supabaseUrl, "NEXT_PUBLIC_SUPABASE_ANON_KEY=", !!supabaseAnonKey);
+    throw new Error(missingEnvMessage());
+  }
+
+  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  return _supabase;
+}
+
+export function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("Supabase env presence: NEXT_PUBLIC_SUPABASE_URL=", !!supabaseUrl, "SUPABASE_SERVICE_ROLE_KEY=", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    throw new Error(missingEnvMessage());
+  }
+
+  _supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  return _supabaseAdmin;
+}
 
 export const BUCKETS = {
   carImages: "car_images",
@@ -28,6 +62,8 @@ export async function uploadToStorage(
   const mimeType = contentType ?? (file instanceof File ? file.type : "application/octet-stream");
 
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+
     const { data, error } = await supabaseAdmin.storage
       .from(bucket)
       .upload(path, file, {
@@ -54,6 +90,7 @@ export async function uploadToStorage(
  * Delete a file from Supabase Storage by its public URL or path.
  */
 export async function deleteFromStorage(bucket: string, path: string): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
   const { error } = await supabaseAdmin.storage.from(bucket).remove([path]);
   if (error) {
     console.error("Storage delete error:", error.message);

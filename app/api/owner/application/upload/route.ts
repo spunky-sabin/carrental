@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/owner";
-import { supabaseAdmin, BUCKETS } from "@/lib/supabase";
+import { getSupabaseAdmin, BUCKETS } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -39,6 +39,8 @@ export async function POST(request: Request) {
   let fileUrl: string;
 
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from(BUCKETS.ownerDocuments)
       .upload(fileName, blob, {

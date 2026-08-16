@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertOwnerCar, requireOwnerUser } from "@/lib/owner";
-import { supabaseAdmin, BUCKETS } from "@/lib/supabase";
+import { getSupabaseAdmin, BUCKETS } from "@/lib/supabase";
 import { query } from "@/lib/db";
 
 type Params = {
@@ -49,6 +49,8 @@ export async function POST(request: Request, { params }: Params) {
   let imageUrl: string;
 
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from(BUCKETS.carImages)
       .upload(fileName, blob, {
