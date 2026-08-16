@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { AppScreen, Icon } from "@/components/app/AppUI";
 import type { UserProfile } from "@/components/app/types";
 import type {
@@ -159,7 +159,12 @@ export default function OwnerDashboardClient({ profile, data, section, bookingId
   const [imageCarId, setImageCarId] = useState<number | null>(data.cars[0]?.id || null);
   const [imageUrl, setImageUrl] = useState("");
   const [reviewFilter, setReviewFilter] = useState("all");
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState<string>("");
+
+  // Ensure client-only initialization of date to avoid SSR/client hydration mismatches
+  useEffect(() => {
+    setSelectedDate(new Date().toISOString().slice(0, 10));
+  }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
