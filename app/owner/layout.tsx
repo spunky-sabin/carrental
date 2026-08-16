@@ -6,10 +6,19 @@ export default async function OwnerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const access = await requireOwnerUser();
+  let access;
+  try {
+    access = await requireOwnerUser();
+  } catch (err) {
+    // Prevent unexpected server errors from returning 500. Log and redirect to home.
+    // This avoids exposing a broken server-rendered page while further debugging is performed.
+    // eslint-disable-next-line no-console
+    console.error('OwnerLayout: requireOwnerUser threw:', err);
+    redirect('/');
+  }
 
-  if ("error" in access) {
-    if (access.status === 401) {
+  if (!access || "error" in access) {
+    if (access?.status === 401) {
       redirect("/");
     }
 
